@@ -1,0 +1,10 @@
+{
+  "cluster": ["manage_index_templates", "manage_ilm", "monitor"],
+  "indices": [
+    {
+      "names": [ "springboot-logs*", "logstash-*" ],
+      "privileges": [ "read", "write", "create", "create_index", "manage", "monitor" ]
+    }
+  ],
+  "run_as": []
+}

@@ -1,0 +1,284 @@
+[
+  {
+    "compressor": "NONE",
+    "id": "2d72852e-3fca-4a7b-86cd-da9f270e08aa",
+    "host": "redis-6",
+    "port": 6379,
+    "name": "redis6",
+    "db": 0,
+    "username": null,
+    "password": "hoabinh12",
+    "connectionType": "STANDALONE",
+    "nameFromProvider": null,
+    "provider": "REDIS_STACK",
+    "lastConnection": "2024-08-13T05:25:12.227Z",
+    "modules": [
+      {
+        "name": "search",
+        "version": 21005,
+        "semanticVersion": "2.10.5"
+      },
+      {
+        "name": "timeseries",
+        "version": 11202,
+        "semanticVersion": "1.12.2"
+      },
+      {
+        "name": "ReJSON",
+        "version": 20803,
+        "semanticVersion": "2.8.3"
+      },
+      {
+        "name": "redisgears_2",
+        "version": 20020
+      },
+      {
+        "name": "bf",
+        "version": 20802,
+        "semanticVersion": "2.8.2"
+      }
+    ],
+    "tls": null,
+    "tlsServername": null,
+    "verifyServerCert": null,
+    "caCert": null,
+    "clientCert": null,
+    "ssh": null,
+    "sshOptions": null
+  },
+  {
+    "compressor": "NONE",
+    "id": "a3d661c2-4816-4e4b-8570-016fddede8a2",
+    "host": "redis-5",
+    "port": 6379,
+    "name": "redis5",
+    "db": 0,
+    "username": null,
+    "password": "hoabinh12",
+    "connectionType": "STANDALONE",
+    "nameFromProvider": null,
+    "provider": "REDIS_STACK",
+    "lastConnection": "2024-08-13T05:23:11.623Z",
+    "modules": [
+      {
+        "name": "search",
+        "version": 21005,
+        "semanticVersion": "2.10.5"
+      },
+      {
+        "name": "ReJSON",
+        "version": 20803,
+        "semanticVersion": "2.8.3"
+      },
+      {
+        "name": "redisgears_2",
+        "version": 20020
+      },
+      {
+        "name": "timeseries",
+        "version": 11202,
+        "semanticVersion": "1.12.2"
+      },
+      {
+        "name": "bf",
+        "version": 20802,
+        "semanticVersion": "2.8.2"
+      }
+    ],
+    "tls": null,
+    "tlsServername": null,
+    "verifyServerCert": null,
+    "caCert": null,
+    "clientCert": null,
+    "ssh": null,
+    "sshOptions": null
+  },
+  {
+    "compressor": "NONE",
+    "id": "ebd8c9da-e36e-4896-8dcc-4cc82b17821d",
+    "host": "redis-4",
+    "port": 6379,
+    "name": "redis4",
+    "db": 0,
+    "username": null,
+    "password": "hoabinh12",
+    "connectionType": "STANDALONE",
+    "nameFromProvider": null,
+    "provider": "REDIS_STACK",
+    "lastConnection": "2024-08-13T05:22:57.351Z",
+    "modules": [
+      {
+        "name": "timeseries",
+        "version": 11202,
+        "semanticVersion": "1.12.2"
+      },
+      {
+        "name": "redisgears_2",
+        "version": 20020
+      },
+      {
+        "name": "bf",
+        "version": 20802,
+        "semanticVersion": "2.8.2"
+      },
+      {
+        "name": "ReJSON",
+        "version": 20803,
+        "semanticVersion": "2.8.3"
+      },
+      {
+        "name": "search",
+        "version": 21005,
+        "semanticVersion": "2.10.5"
+      }
+    ],
+    "tls": null,
+    "tlsServername": null,
+    "verifyServerCert": null,
+    "caCert": null,
+    "clientCert": null,
+    "ssh": null,
+    "sshOptions": null
+  },
+  {
+    "compressor": "NONE",
+    "id": "40684917-94af-4e16-a910-b74983afb5f7",
+    "host": "redis-3",
+    "port": 6379,
+    "name": "redis3",
+    "db": 0,
+    "username": null,
+    "password": "hoabinh12",
+    "connectionType": "STANDALONE",
+    "nameFromProvider": null,
+    "provider": "REDIS_STACK",
+    "lastConnection": "2024-08-13T05:22:37.488Z",
+    "modules": [
+      {
+        "name": "search",
+        "version": 21005,
+        "semanticVersion": "2.10.5"
+      },
+      {
+        "name": "timeseries",
+        "version": 11202,
+        "semanticVersion": "1.12.2"
+      },
+      {
+        "name": "ReJSON",
+        "version": 20803,
+        "semanticVersion": "2.8.3"
+      },
+      {
+        "name": "bf",
+        "version": 20802,
+        "semanticVersion": "2.8.2"
+      },
+      {
+        "name": "redisgears_2",
+        "version": 20020
+      }
+    ],
+    "tls": null,
+    "tlsServername": null,
+    "verifyServerCert": null,
+    "caCert": null,
+    "clientCert": null,
+    "ssh": null,
+    "sshOptions": null
+  },
+  {
+    "compressor": "NONE",
+    "id": "8c11196c-4227-4fd9-a444-bef66a0b730c",
+    "host": "redis-2",
+    "port": 6379,
+    "name": "redis2",
+    "db": 0,
+    "username": null,
+    "password": "hoabinh12",
+    "connectionType": "STANDALONE",
+    "nameFromProvider": null,
+    "provider": "REDIS_STACK",
+    "lastConnection": "2024-08-13T05:22:23.551Z",
+    "modules": [
+      {
+        "name": "ReJSON",
+        "version": 20803,
+        "semanticVersion": "2.8.3"
+      },
+      {
+        "name": "search",
+        "version": 21005,
+        "semanticVersion": "2.10.5"
+      },
+      {
+        "name": "timeseries",
+        "version": 11202,
+        "semanticVersion": "1.12.2"
+      },
+      {
+        "name": "redisgears_2",
+        "version": 20020
+      },
+      {
+        "name": "bf",
+        "version": 20802,
+        "semanticVersion": "2.8.2"
+      }
+    ],
+    "tls": null,
+    "tlsServername": null,
+    "verifyServerCert": null,
+    "caCert": null,
+    "clientCert": null,
+    "ssh": null,
+    "sshOptions": null
+  },
+  {
+    "compressor": "NONE",
+    "id": "33b697f4-2b99-4072-a85a-c9649d5d3c8d",
+    "host": "redis-1",
+    "port": 6379,
+    "name": "redis1",
+    "db": 0,
+    "username": null,
+    "password": "hoabinh12",
+    "connectionType": "STANDALONE",
+    "nameFromProvider": null,
+    "provider": "REDIS_STACK",
+    "lastConnection": "2024-08-13T05:22:08.258Z",
+    "modules": [
+      {
+        "name": "ReJSON",
+        "version": 20803,
+        "semanticVersion": "2.8.3"
+      },
+      {
+        "name": "timeseries",
+        "version": 11202,
+        "semanticVersion": "1.12.2"
+      },
+      {
+        "name": "search",
+        "version": 21005,
+        "semanticVersion": "2.10.5"
+      },
+      {
+        "name": "bf",
+        "version": 20802,
+        "semanticVersion": "2.8.2"
+      },
+      {
+        "name": "redisgears_2",
+        "version": 20020
+      }
+    ],
+    "tls": null,
+    "tlsServername": null,
+    "verifyServerCert": null,
+    "caCert": null,
+    "clientCert": null,
+    "ssh": null,
+    "sshOptions": null
+  }
+]

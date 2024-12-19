@@ -1,0 +1,46 @@
+{
+    "connections": [
+        {
+            "name": "Redis Cluster Node 1",
+            "host": "redis-1",
+            "port": 6379,
+            "password": "hoabinh12",
+            "type": "STANDALONE"
+        },
+        {
+            "name": "Redis Cluster Node 2",
+            "host": "redis-2",
+            "port": 6379,
+            "password": "hoabinh12",
+            "type": "STANDALONE"
+        },
+        {
+            "name": "Redis Cluster Node 3",
+            "host": "redis-3",
+            "port": 6379,
+            "password": "hoabinh12",
+            "type": "STANDALONE"
+        },
+        {
+            "name": "Redis Cluster Node 4",
+            "host": "redis-4",
+            "port": 6379,
+            "password": "hoabinh12",
+            "type": "STANDALONE"
+        },
+        {
+            "name": "Redis Cluster Node 5",
+            "host": "redis-5",
+            "port": 6379,
+            "password": "hoabinh12",
+            "type": "STANDALONE"
+        },
+        {
+            "name": "Redis Cluster Node 6",
+            "host": "redis-6",
+            "port": 6379,
+            "password": "hoabinh12",
+            "type": "STANDALONE"
+        }
+    ]
+}

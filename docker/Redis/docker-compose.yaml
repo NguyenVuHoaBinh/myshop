@@ -1,0 +1,101 @@
+version: "3"
+services:
+    redis-1:
+        image: redis/redis-stack-server
+        container_name: redis-1
+        command: ["redis-stack-server","/usr/local/etc/redis/redis.conf"]
+        volumes:
+            - ./redis/node-1/data:/data
+            - ./redis/node-1/conf/redis.conf:/usr/local/etc/redis/redis.conf
+        ports:
+            - 6371:6379
+            - 16371:16379
+        networks:
+            redis:
+                ipv4_address: 172.38.0.11
+    redis-2:
+        image: redis/redis-stack-server
+        container_name: redis-2
+        command: ["redis-stack-server", "/usr/local/etc/redis/redis.conf"]
+        volumes:
+            - ./redis/node-2/data:/data
+            - ./redis/node-2/conf/redis.conf:/usr/local/etc/redis/redis.conf
+        ports:
+            - "6372:6379"
+            - 16372:16379
+        networks:
+            redis:
+                ipv4_address: 172.38.0.12
+    redis-3:
+        image: redis/redis-stack-server
+        container_name: redis-3
+        command: ["redis-stack-server", "/usr/local/etc/redis/redis.conf"]
+        volumes:
+            - ./redis/node-3/data:/data
+            - ./redis/node-3/conf/redis.conf:/usr/local/etc/redis/redis.conf
+        ports:
+            - "6373:6379"
+            - 16373:16379
+        networks:
+            redis:
+                ipv4_address: 172.38.0.13
+    redis-4:
+        image: redis/redis-stack-server
+        container_name: redis-4
+        command: ["redis-stack-server", "/usr/local/etc/redis/redis.conf"]
+        volumes:
+            - ./redis/node-4/data:/data
+            - ./redis/node-4/conf/redis.conf:/usr/local/etc/redis/redis.conf
+        ports:
+            - "6374:6379"
+            - 16374:16379
+        networks:
+            redis:
+                ipv4_address: 172.38.0.14
+    redis-5:
+        image: redis/redis-stack-server
+        container_name: redis-5
+        command: ["redis-stack-server", "/usr/local/etc/redis/redis.conf"]
+        volumes:
+            - ./redis/node-5/data:/data
+            - ./redis/node-5/conf/redis.conf:/usr/local/etc/redis/redis.conf
+        ports:
+            - "6375:6379"
+            - 16375:16379
+        networks:
+            redis:
+                ipv4_address: 172.38.0.15
+    redis-6:
+        image: redis/redis-stack-server
+        container_name: redis-6
+        command: ["redis-stack-server", "/usr/local/etc/redis/redis.conf"]
+        volumes:
+            - ./redis/node-6/data:/data
+            - ./redis/node-6/conf/redis.conf:/usr/local/etc/redis/redis.conf
+        ports:
+            - "6376:6379"
+            - "16376:16379"
+        networks:
+            redis:
+                ipv4_address: 172.38.0.16
+
+    redis-vector:
+        image: redis/redis-stack-server
+        container_name: redis-vector
+        command: ["redis-stack-server", "/usr/local/etc/redis/redis.conf"]
+        volumes:
+            - ./redis/node-vector/data:/data
+            - ./redis/node-vector/conf/redis.conf:/usr/local/etc/redis/redis.conf
+        ports:
+            - "6377:6379"
+        networks:
+            redis:
+                ipv4_address: 172.38.0.17
+
+networks:
+    redis:
+        driver: bridge
+        ipam:
+            config:
+                - subnet: 172.38.0.0/16
+                  gateway: 172.38.0.1
