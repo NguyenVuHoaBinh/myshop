@@ -1,12 +1,13 @@
 package viettel.telecom.backend.config.datahub.postgresql;
 
+import org.springframework.context.annotation.Configuration;
 import org.springframework.stereotype.Component;
-import org.yaml.snakeyaml.DumperOptions;
-import org.yaml.snakeyaml.Yaml;
+import viettel.telecom.backend.config.datahub.DataHubConfigStrategy;
 import viettel.telecom.backend.config.datahub.RDBMSConfigConstants;
 import viettel.telecom.backend.exception.InvalidDatabaseConfigException;
 import viettel.telecom.backend.exception.YamlSerializationException;
-import viettel.telecom.backend.config.datahub.DataHubConfigStrategy;
+import org.yaml.snakeyaml.DumperOptions;
+import org.yaml.snakeyaml.Yaml;
 
 import java.util.Arrays;
 import java.util.List;
@@ -22,6 +23,7 @@ public class PostgresConfigStrategy implements DataHubConfigStrategy {
 
             PostgresConfigBuilder builder = new PostgresConfigBuilder();
 
+            // Configure the source
             builder.withSource(
                     "postgres",
                     dbParams.get(RDBMSConfigConstants.HOST_PORT),
@@ -30,11 +32,7 @@ public class PostgresConfigStrategy implements DataHubConfigStrategy {
                     dbParams.get(RDBMSConfigConstants.PASSWORD)
             );
 
-            addBooleanParameter(builder, RDBMSConfigConstants.INCLUDE_TABLES, dbParams.get(RDBMSConfigConstants.INCLUDE_TABLES));
-            addBooleanParameter(builder, RDBMSConfigConstants.INCLUDE_VIEWS, dbParams.get(RDBMSConfigConstants.INCLUDE_VIEWS));
-            addBooleanParameter(builder, RDBMSConfigConstants.PROFILING_ENABLED, dbParams.get(RDBMSConfigConstants.PROFILING_ENABLED));
-            addBooleanParameter(builder, RDBMSConfigConstants.STATEFUL_INGESTION_ENABLED, dbParams.get(RDBMSConfigConstants.STATEFUL_INGESTION_ENABLED));
-
+            // Optional pattern configurations
             addPattern(builder, RDBMSConfigConstants.DATABASE_PATTERN,
                     dbParams.get("database_pattern_allow"),
                     dbParams.get("database_pattern_deny")
@@ -44,8 +42,10 @@ public class PostgresConfigStrategy implements DataHubConfigStrategy {
                     dbParams.get("table_pattern_deny")
             );
 
+            // Configure the sink
             builder.withSink("datahub-rest", dataHubUrl);
 
+            // Generate YAML
             return serializeToYaml(builder.build());
 
         } catch (IllegalArgumentException e) {
@@ -55,37 +55,55 @@ public class PostgresConfigStrategy implements DataHubConfigStrategy {
         }
     }
 
+    /**
+     * Validates the required database parameters.
+     *
+     * @param dbParams The database parameters map.
+     */
     private void validateDbParams(Map<String, String> dbParams) {
-        if (dbParams.get(RDBMSConfigConstants.HOST_PORT) == null ||
-                dbParams.get(RDBMSConfigConstants.DATABASE) == null ||
-                dbParams.get(RDBMSConfigConstants.USERNAME) == null ||
-                dbParams.get(RDBMSConfigConstants.PASSWORD) == null) {
+        if (dbParams == null ||
+                !dbParams.containsKey(RDBMSConfigConstants.HOST_PORT) || dbParams.get(RDBMSConfigConstants.HOST_PORT).isBlank() ||
+                !dbParams.containsKey(RDBMSConfigConstants.DATABASE) || dbParams.get(RDBMSConfigConstants.DATABASE).isBlank() ||
+                !dbParams.containsKey(RDBMSConfigConstants.USERNAME) || dbParams.get(RDBMSConfigConstants.USERNAME).isBlank() ||
+                !dbParams.containsKey(RDBMSConfigConstants.PASSWORD) || dbParams.get(RDBMSConfigConstants.PASSWORD).isBlank()) {
             throw new InvalidDatabaseConfigException("Missing required database parameters (host, database, username, or password).");
         }
     }
 
-    private void addBooleanParameter(PostgresConfigBuilder builder, String paramName, String paramValue) {
-        if (paramValue != null && !paramValue.isEmpty()) {
-            builder.withBooleanParam(paramName, Boolean.parseBoolean(paramValue));
-        }
-    }
-
+    /**
+     * Adds a pattern configuration to the builder if allow or deny patterns are provided.
+     *
+     * @param builder      The PostgresConfigBuilder instance.
+     * @param patternName  The name of the pattern (e.g., "database_pattern", "table_pattern").
+     * @param allowPatterns Comma-separated allow patterns.
+     * @param denyPatterns  Comma-separated deny patterns.
+     */
     private void addPattern(PostgresConfigBuilder builder, String patternName, String allowPatterns, String denyPatterns) {
         List<String> allow = allowPatterns != null ? Arrays.asList(allowPatterns.split(",")) : null;
         List<String> deny = denyPatterns != null ? Arrays.asList(denyPatterns.split(",")) : null;
-        builder.withPattern(patternName, allow, deny);
+
+        if ((allow != null && !allow.isEmpty()) || (deny != null && !deny.isEmpty())) {
+            builder.withPattern(patternName, allow, deny);
+        }
     }
 
-    private String serializeToYaml(Map<String, Object> configMap) {
+    /**
+     * Serializes a configuration map to YAML format.
+     *
+     * @param config The configuration map.
+     * @return The YAML string.
+     */
+    private String serializeToYaml(Map<String, Object> config) {
         try {
             DumperOptions options = new DumperOptions();
             options.setPrettyFlow(true);
             options.setDefaultFlowStyle(DumperOptions.FlowStyle.BLOCK);
+            options.setExplicitStart(false); // Prevents "---"
 
             Yaml yaml = new Yaml(options);
-            return yaml.dump(configMap);
+            return yaml.dump(config);
         } catch (Exception e) {
-            throw new YamlSerializationException("Error serializing configuration to YAML", e);
+            throw new YamlSerializationException("Failed to serialize configuration to YAML", e);
         }
     }
 }

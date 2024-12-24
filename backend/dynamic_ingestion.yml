@@ -1,0 +1,11 @@
+sink:
+  type: datahub-rest
+  config:
+    server: http://localhost:8080
+source:
+  type: postgres
+  config:
+    database: vpos
+    password: hoabinh12
+    host_port: 0.0.0.0:5432
+    username: postgres

@@ -18,19 +18,10 @@ public class PostgresConfigBuilder {
         sourceDetails.put(RDBMSConfigConstants.HOST_PORT, hostPort);
         sourceDetails.put(RDBMSConfigConstants.DATABASE, database);
         sourceDetails.put(RDBMSConfigConstants.USERNAME, username);
-        sourceDetails.put(RDBMSConfigConstants.PASSWORD, password);
+        sourceDetails.put(RDBMSConfigConstants.PASSWORD, password); // Ensure no explicit quoting
 
         sourceConfig.put(RDBMSConfigConstants.CONFIG, sourceDetails);
         config.put(RDBMSConfigConstants.SOURCE, sourceConfig);
-        return this;
-    }
-
-    public PostgresConfigBuilder withBooleanParam(String paramName, boolean value) {
-        if (!config.containsKey(RDBMSConfigConstants.SOURCE)) {
-            throw new IllegalStateException("Source must be defined before adding parameters.");
-        }
-        Map<String, Object> sourceConfig = (Map<String, Object>) ((Map<String, Object>) config.get(RDBMSConfigConstants.SOURCE)).get(RDBMSConfigConstants.CONFIG);
-        sourceConfig.put(paramName, value);
         return this;
     }
 
@@ -47,8 +38,10 @@ public class PostgresConfigBuilder {
             patternConfig.put(RDBMSConfigConstants.DENY, denyPatterns);
         }
 
-        Map<String, Object> sourceConfig = (Map<String, Object>) ((Map<String, Object>) config.get(RDBMSConfigConstants.SOURCE)).get(RDBMSConfigConstants.CONFIG);
-        sourceConfig.put(patternName, patternConfig);
+        if (!patternConfig.isEmpty()) {
+            Map<String, Object> sourceConfig = (Map<String, Object>) ((Map<String, Object>) config.get(RDBMSConfigConstants.SOURCE)).get(RDBMSConfigConstants.CONFIG);
+            sourceConfig.put(patternName, patternConfig);
+        }
         return this;
     }
 
@@ -68,4 +61,3 @@ public class PostgresConfigBuilder {
         return config;
     }
 }
-
