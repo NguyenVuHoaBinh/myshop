@@ -23,24 +23,25 @@ public class GraphQLService {
     private final RestTemplate restTemplate;
     private final ObjectMapper objectMapper;
 
-    private String graphqlUrl = "http://localhost:8080/graphql";
+    private static final String DEFAULT_GRAPHQL_URL = "http://localhost:8080/api/graphql";
 
     public GraphQLService(RestTemplate restTemplate, ObjectMapper objectMapper) {
         this.restTemplate = restTemplate;
         this.objectMapper = objectMapper;
 
-        if (graphqlUrl == null || graphqlUrl.isBlank()) {
+        if (DEFAULT_GRAPHQL_URL == null || DEFAULT_GRAPHQL_URL.isBlank()) {
             logger.error("The GraphQL URL is not provided. Ensure 'datahub.graphql.url' is configured.");
             throw new IllegalArgumentException("The GraphQL URL must not be null or empty. Please check the configuration.");
         }
-        logger.info("GraphQL URL successfully injected: {}", graphqlUrl);
+        logger.info("GraphQL URL successfully set: {}", DEFAULT_GRAPHQL_URL);
     }
 
-    /**
-     * Fetches table names for the specified database.
-     */
     public String fetchTableNames(String databaseName) {
         logger.info("Fetching table names for database: {}", databaseName);
+
+        if (databaseName == null || databaseName.isBlank()) {
+            throw new IllegalArgumentException("Database name must not be null or empty");
+        }
 
         String query = buildTableNamesQuery(databaseName);
         String jsonQuery = createJsonQuery(query);
@@ -49,26 +50,21 @@ public class GraphQLService {
         headers.setContentType(MediaType.APPLICATION_JSON);
 
         HttpEntity<String> entity = new HttpEntity<>(jsonQuery, headers);
-        logger.debug("GraphQL request - URL: {}, Query: {}", graphqlUrl, jsonQuery);
+        logger.debug("Generated GraphQL request: {}", jsonQuery);
 
         try {
-            ResponseEntity<String> responseEntity = restTemplate.exchange(graphqlUrl, HttpMethod.POST, entity, String.class);
-            logger.info("Received response for table names in database: {}", databaseName);
+            ResponseEntity<String> responseEntity = restTemplate.exchange(DEFAULT_GRAPHQL_URL, HttpMethod.POST, entity, String.class);
+            logger.info("Received response for database: {}", databaseName);
             return extractTableNames(responseEntity.getBody());
         } catch (HttpClientErrorException e) {
-            throw new GraphQLServiceException(
-                    String.format("Failed to fetch table names for database '%s'. HTTP Status: %s. Error: %s",
-                            databaseName, e.getStatusCode(), e.getResponseBodyAsString()), e);
+            logger.error("Failed to fetch table names for database '{}'. Status: {}, Error: {}", databaseName, e.getStatusCode(), e.getResponseBodyAsString(), e);
+            throw new GraphQLServiceException("Request to GraphQL endpoint failed: " + e.getMessage(), e);
         } catch (Exception e) {
-            throw new GraphQLServiceException(
-                    String.format("Unexpected error while fetching table names for database '%s': %s",
-                            databaseName, e.getMessage()), e);
+            logger.error("Unexpected error while fetching table names for database '{}': {}", databaseName, e.getMessage(), e);
+            throw new GraphQLServiceException("Unexpected error: " + e.getMessage(), e);
         }
     }
 
-    /**
-     * Fetches fields for a specific table.
-     */
     public String fetchTableFields(String tableName) {
         logger.info("Fetching field metadata for table: {}", tableName);
 
@@ -79,70 +75,68 @@ public class GraphQLService {
         headers.setContentType(MediaType.APPLICATION_JSON);
 
         HttpEntity<String> entity = new HttpEntity<>(jsonQuery, headers);
-        logger.debug("GraphQL request - URL: {}, Query: {}", graphqlUrl, jsonQuery);
+        logger.debug("Generated GraphQL request: {}", jsonQuery);
 
         try {
-            ResponseEntity<String> responseEntity = restTemplate.exchange(graphqlUrl, HttpMethod.POST, entity, String.class);
+            ResponseEntity<String> responseEntity = restTemplate.exchange(DEFAULT_GRAPHQL_URL, HttpMethod.POST, entity, String.class);
             logger.info("Received response for table: {}", tableName);
             return extractFieldMetadata(responseEntity.getBody());
         } catch (HttpClientErrorException e) {
-            throw new GraphQLServiceException(
-                    String.format("Failed to fetch fields for table '%s'. HTTP Status: %s. Error: %s",
-                            tableName, e.getStatusCode(), e.getResponseBodyAsString()), e);
+            logger.error("Failed to fetch fields for table '{}'. Status: {}, Error: {}", tableName, e.getStatusCode(), e.getResponseBodyAsString(), e);
+            throw new GraphQLServiceException("Request to GraphQL endpoint failed: " + e.getMessage(), e);
         } catch (Exception e) {
-            throw new GraphQLServiceException(
-                    String.format("Unexpected error while fetching fields for table '%s': %s",
-                            tableName, e.getMessage()), e);
+            logger.error("Unexpected error while fetching fields for table '{}': {}", tableName, e.getMessage(), e);
+            throw new GraphQLServiceException("Unexpected error: " + e.getMessage(), e);
         }
     }
 
     private String buildTableNamesQuery(String databaseName) {
-        return String.format("""
-                {
-                  search(input: {
-                    type: DATASET,
-                    query: "%s",
-                    start: 0,
-                    count: 1000
-                  }) {
-                    searchResults {
-                      entity {
-                        ... on Dataset {
-                          name
-                        }
-                      }
+        return """
+            {
+              search(input: {
+                type: DATASET,
+                query: "%s",
+                start: 0,
+                count: 1000
+              }) {
+                searchResults {
+                  entity {
+                    ... on Dataset {
+                      name
                     }
                   }
                 }
-                """, databaseName);
+              }
+            }
+            """.formatted(databaseName);
     }
 
     private String buildFieldMetadataQuery(String tableName) {
-        return String.format("""
-                {
-                  search(input: {
-                    type: DATASET,
-                    query: "%s",
-                    start: 0,
-                    count: 1
-                  }) {
-                    searchResults {
-                      entity {
-                        ... on Dataset {
-                          name
-                          schemaMetadata {
-                            fields {
-                              fieldPath
-                              description
-                              nativeDataType
-                            }
-                          }
+        return """
+            {
+              search(input: {
+                type: DATASET,
+                query: "%s",
+                start: 0,
+                count: 1
+              }) {
+                searchResults {
+                  entity {
+                    ... on Dataset {
+                      name
+                      schemaMetadata {
+                        fields {
+                          fieldPath
+                          description
+                          nativeDataType
                         }
                       }
                     }
                   }
                 }
-                """, tableName);
+              }
+            }
+            """.formatted(tableName);
     }
 
     private String extractTableNames(String response) {
@@ -160,6 +154,7 @@ public class GraphQLService {
             logger.info("Successfully extracted table names.");
             return objectMapper.writeValueAsString(tableNamesArray);
         } catch (Exception e) {
+            logger.error("Error processing table names response: {}", e.getMessage(), e);
             throw new GraphQLServiceException("Error processing table names response: " + e.getMessage(), e);
         }
     }
@@ -184,12 +179,13 @@ public class GraphQLService {
             logger.info("Successfully extracted field metadata.");
             return objectMapper.writeValueAsString(fieldsArray);
         } catch (Exception e) {
+            logger.error("Error processing field metadata response: {}", e.getMessage(), e);
             throw new GraphQLServiceException("Error processing field metadata response: " + e.getMessage(), e);
         }
     }
 
     private String createJsonQuery(String query) {
-        return String.format("{\"query\":\"%s\"}", query.replace("\"", "\\\""));
+        return String.format("{\"query\":\"%s\"}", query.replace("\"", "\\\"").replace("\n", " "));
     }
 
     public static class GraphQLServiceException extends RuntimeException {

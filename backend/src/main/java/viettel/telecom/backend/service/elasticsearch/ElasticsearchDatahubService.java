@@ -3,7 +3,6 @@ package viettel.telecom.backend.service.elasticsearch;
 import co.elastic.clients.elasticsearch.ElasticsearchClient;
 import co.elastic.clients.elasticsearch.core.BulkRequest;
 import co.elastic.clients.elasticsearch.core.BulkResponse;
-import co.elastic.clients.elasticsearch.core.IndexRequest;
 import co.elastic.clients.elasticsearch.core.GetRequest;
 import co.elastic.clients.elasticsearch.core.GetResponse;
 import co.elastic.clients.elasticsearch.core.SearchRequest;
@@ -17,6 +16,7 @@ import org.springframework.stereotype.Service;
 import viettel.telecom.backend.entity.promptbuilder.ObjectField;
 
 import java.io.IOException;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.stream.Collectors;
 
@@ -24,14 +24,18 @@ import java.util.stream.Collectors;
 public class ElasticsearchDatahubService {
 
     private static final Logger logger = LoggerFactory.getLogger(ElasticsearchDatahubService.class);
+
     private static final String INDEX_NAME = "crm_objects";
-    
+
     private final ElasticsearchClient elasticsearchClient;
 
     public ElasticsearchDatahubService(ElasticsearchClient elasticsearchClient) {
         this.elasticsearchClient = elasticsearchClient;
     }
 
+    /**
+     * Tests the connection to Elasticsearch.
+     */
     public void testConnection() {
         try {
             var response = elasticsearchClient.info();
@@ -41,18 +45,17 @@ public class ElasticsearchDatahubService {
         }
     }
 
-
     /**
-     * Bulk indexes a list of tables into Elasticsearch with retry logic.
+     * Bulk indexes a list of tables with fields into Elasticsearch.
      *
-     * @param tables The list of tables to index.
+     * @param tables The list of tables to index with their fields.
      */
     @Retryable(
             value = IOException.class,
             maxAttempts = 3,
             backoff = @Backoff(delay = 2000, multiplier = 1.5)
     )
-    public void bulkIndexTables(List<ObjectField> tables) {
+    public void bulkIndexTablesWithFields(List<ObjectField> tables) {
         try {
             BulkRequest.Builder bulkRequestBuilder = new BulkRequest.Builder();
 
@@ -68,57 +71,43 @@ public class ElasticsearchDatahubService {
             BulkResponse bulkResponse = elasticsearchClient.bulk(bulkRequestBuilder.build());
             if (bulkResponse.errors()) {
                 logger.error("Bulk indexing encountered errors. Details: {}", bulkResponse.items());
-                throw new RuntimeException("Bulk indexing failed with errors. Check logs for details.");
+                throw new RuntimeException("Bulk indexing with fields failed.");
             }
 
-            logger.info("Bulk indexing completed successfully. Indexed {} tables.", tables.size());
-
+            logger.info("Successfully indexed {} tables with fields.", tables.size());
         } catch (IOException e) {
-            logger.error("Failed to bulk index tables into Elasticsearch after retries.", e);
-            throw new RuntimeException("Bulk indexing failed after retries.", e);
+            logger.error("Failed to bulk index tables with fields into Elasticsearch.", e);
+            throw new RuntimeException("Bulk indexing with fields failed.", e);
         }
     }
 
     /**
-     * Updates fields for a specific table in Elasticsearch with retry logic.
+     * Recovery logic for bulk indexing failures.
      *
-     * @param tableName The name of the table.
-     * @param fields    The fields to update for the table.
+     * @param e      The IOException encountered.
+     * @param tables The list of tables that failed to index.
+     */
+    @Recover
+    public void recoverBulkIndexFailure(IOException e, List<ObjectField> tables) {
+        logger.error("Bulk indexing with fields failed after retries. Failed tables: {}", tables.stream()
+                .map(ObjectField::getObjectName)
+                .collect(Collectors.joining(", ")), e);
+    }
+
+    /**
+     * Fetches table names along with their fields from Elasticsearch.
+     *
+     * @param page   The page number (0-based index).
+     * @param size   The number of entries per page.
+     * @param filter Optional filter string to match table names.
+     * @return A list of ObjectField containing table names and fields.
      */
     @Retryable(
             value = IOException.class,
             maxAttempts = 3,
             backoff = @Backoff(delay = 2000, multiplier = 1.5)
     )
-    public void updateTableFields(String tableName, List<String> fields) {
-        try {
-            ObjectField objectField = new ObjectField();
-            objectField.setObjectName(tableName);
-            objectField.setFields(fields);
-
-            elasticsearchClient.index(IndexRequest.of(i -> i
-                    .index(INDEX_NAME)
-                    .id(tableName)
-                    .document(objectField)
-            ));
-
-            logger.info("Updated fields for table: {}", tableName);
-
-        } catch (IOException e) {
-            logger.error("Failed to update fields for table: {} after retries.", tableName, e);
-            throw new RuntimeException("Field update failed after retries.", e);
-        }
-    }
-
-    /**
-     * Fetches table names from Elasticsearch with pagination and optional filtering.
-     *
-     * @param page   The page number (0-based index).
-     * @param size   The number of entries per page.
-     * @param filter Optional filter string to match table names.
-     * @return A list of table names.
-     */
-    public List<String> fetchTableNames(int page, int size, String filter) {
+    public List<ObjectField> fetchTableNamesWithFields(int page, int size, String filter) {
         try {
             SearchRequest searchRequest = SearchRequest.of(s -> s
                     .index(INDEX_NAME)
@@ -130,14 +119,34 @@ public class ElasticsearchDatahubService {
 
             SearchResponse<ObjectField> response = elasticsearchClient.search(searchRequest, ObjectField.class);
 
-            return response.hits().hits().stream()
-                    .map(hit -> hit.source().getObjectName())
-                    .collect(Collectors.toList());
+            List<ObjectField> tables = new ArrayList<>();
+            for (var hit : response.hits().hits()) {
+                if (hit.source() != null) {
+                    tables.add(hit.source());
+                }
+            }
+            return tables;
 
         } catch (IOException e) {
-            logger.error("Failed to fetch table names from Elasticsearch.", e);
-            throw new RuntimeException("Failed to fetch table names from Elasticsearch.", e);
+            logger.error("Failed to fetch table names with fields from Elasticsearch.", e);
+            throw new RuntimeException("Failed to fetch table names with fields.", e);
         }
+    }
+
+    /**
+     * Recovery logic for fetch operations.
+     *
+     * @param e      The IOException encountered.
+     * @param page   The page number.
+     * @param size   The size of the page.
+     * @param filter The filter applied.
+     * @return An empty list as fallback.
+     */
+    @Recover
+    public List<ObjectField> recoverFetchTableNamesFailure(IOException e, int page, int size, String filter) {
+        logger.error("Fetching table names with fields failed after retries. Page: {}, Size: {}, Filter: {}",
+                page, size, filter, e);
+        return List.of(); // Return an empty list as a fallback
     }
 
     /**
@@ -166,30 +175,5 @@ public class ElasticsearchDatahubService {
             logger.error("Failed to fetch fields for table: {}", tableName, e);
             throw new RuntimeException("Failed to fetch fields for table: " + tableName, e);
         }
-    }
-
-    /**
-     * Recovery logic for bulk indexing failures.
-     *
-     * @param e      The IOException encountered.
-     * @param tables The list of tables that failed to index.
-     */
-    @Recover
-    public void recoverFromBulkIndexFailure(IOException e, List<ObjectField> tables) {
-        logger.error("Bulk indexing failed after retries. Failed tables: {}", tables.stream()
-                .map(ObjectField::getObjectName)
-                .collect(Collectors.joining(", ")));
-    }
-
-    /**
-     * Recovery logic for field update failures.
-     *
-     * @param e        The IOException encountered.
-     * @param tableName The name of the table.
-     * @param fields    The fields that failed to update.
-     */
-    @Recover
-    public void recoverFromFieldUpdateFailure(IOException e, String tableName, List<String> fields) {
-        logger.error("Field update failed after retries for table '{}'. Fields: {}", tableName, fields, e);
     }
 }

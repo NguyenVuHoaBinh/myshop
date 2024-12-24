@@ -29,69 +29,48 @@ public class SchemaSyncService {
     }
 
     /**
-     * Synchronizes table names for a given database by fetching schema details
-     * from DataHub and indexing them into Elasticsearch.
+     * Synchronizes table names and fields for a given database.
      *
      * @param databaseName The name of the database.
      */
-    public void syncTableNames(String databaseName) {
-        logger.info("Starting synchronization of table names for database: {}", databaseName);
+    public void syncTableNamesAndFields(String databaseName) {
+        logger.info("Starting synchronization of table names and fields for database: {}", databaseName);
 
         try {
             // Fetch table names from DataHub via GraphQL
             String tableNamesJson = graphQLService.fetchTableNames(databaseName);
             JsonNode tableNamesNode = objectMapper.readTree(tableNamesJson);
 
-            // Build ObjectField objects for each table
+            // Build ObjectField objects for each table, including fields
             List<ObjectField> tables = new ArrayList<>();
             for (JsonNode tableNode : tableNamesNode) {
+                String tableName = tableNode.asText();
+
+                // Fetch fields for each table
+                String fieldsJson = graphQLService.fetchTableFields(tableName);
+                JsonNode fieldsNode = objectMapper.readTree(fieldsJson);
+
+                List<String> fields = new ArrayList<>();
+                for (JsonNode fieldNode : fieldsNode) {
+                    fields.add(fieldNode.path("Field").asText());
+                }
+
                 ObjectField objectField = new ObjectField();
-                objectField.setObjectName(tableNode.asText());
+                objectField.setObjectName(tableName);
+                objectField.setFields(fields);
                 objectField.setDatabaseName(databaseName);
                 tables.add(objectField);
             }
 
-            logger.info("Fetched {} table names for database: {}", tables.size(), databaseName);
+            logger.info("Fetched {} tables with fields for database: {}", tables.size(), databaseName);
 
-            // Bulk index table names into Elasticsearch
-            elasticsearchDatahubService.bulkIndexTables(tables);
-            logger.info("Successfully synchronized table names for database: {}", databaseName);
-
-        } catch (Exception e) {
-            logger.error("Error syncing table names for database '{}': {}", databaseName, e.getMessage(), e);
-            throw new RuntimeException("Failed to sync table names for database: " + databaseName, e);
-        }
-    }
-
-    /**
-     * Synchronizes fields for a specific table by fetching metadata
-     * from DataHub and updating Elasticsearch.
-     *
-     * @param tableName The name of the table.
-     */
-    public void syncTableFields(String tableName) {
-        logger.info("Starting synchronization of fields for table: {}", tableName);
-
-        try {
-            // Fetch field metadata from DataHub via GraphQL
-            String fieldsJson = graphQLService.fetchTableFields(tableName);
-            JsonNode fieldsNode = objectMapper.readTree(fieldsJson);
-
-            // Extract field details
-            List<String> fields = new ArrayList<>();
-            for (JsonNode fieldNode : fieldsNode) {
-                fields.add(fieldNode.path("Field").asText());
-            }
-
-            logger.info("Fetched {} fields for table: {}", fields.size(), tableName);
-
-            // Update fields for the specified table in Elasticsearch
-            elasticsearchDatahubService.updateTableFields(tableName, fields);
-            logger.info("Successfully synchronized fields for table: {}", tableName);
+            // Bulk index table names and fields into Elasticsearch
+            elasticsearchDatahubService.bulkIndexTablesWithFields(tables);
+            logger.info("Successfully synchronized table names and fields for database: {}", databaseName);
 
         } catch (Exception e) {
-            logger.error("Error syncing fields for table '{}': {}", tableName, e.getMessage(), e);
-            throw new RuntimeException("Failed to sync fields for table: " + tableName, e);
+            logger.error("Error syncing table names and fields for database '{}': {}", databaseName, e.getMessage(), e);
+            throw new RuntimeException("Failed to sync table names and fields for database: " + databaseName, e);
         }
     }
 }
