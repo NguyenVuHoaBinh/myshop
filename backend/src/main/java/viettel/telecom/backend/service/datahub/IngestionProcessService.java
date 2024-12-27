@@ -14,7 +14,6 @@ import java.util.concurrent.atomic.AtomicBoolean;
 public class IngestionProcessService {
 
     private static final Logger logger = LoggerFactory.getLogger(IngestionProcessService.class);
-    private static final String OUTPUT_LOG_FILE = "ingestion_output.log";
     private static final int PROCESS_TIMEOUT_SECONDS = 60;
 
     /**

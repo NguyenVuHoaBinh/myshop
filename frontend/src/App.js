@@ -12,13 +12,14 @@ const Register = React.lazy(() => import('./views/pages/register/Register'));
 const Page404 = React.lazy(() => import('./views/pages/page404/Page404'));
 const Page500 = React.lazy(() => import('./views/pages/page500/Page500'));
 const PromptBuilder = React.lazy(() => import('./views/promptbuilder/PromptBuilder'));
+const TemplateEditor = React.lazy(() => import('./views/promptbuilder/TemplateEditor'));
 const AgentAction = React.lazy(() => import('./views/agentaction/AgentAction'));
 const AgentBuilderPage = React.lazy(() => import('./views/agentbuilderpage/AgentBuilderPage'));
 const CreateAgentPage = React.lazy(() => import('./views/createagentpage/CreateAgentPage'));
 const NewPromptTemplateModal = React.lazy(() =>
   import('./views/newprompttemplatemodal/NewPromptTemplateModal')
 );
-const AgentBuilderModal = React.lazy(()=> import ('./views/agentbuildermodal/AgentBuilderModal'))
+const AgentBuilderModal = React.lazy(() => import('./views/agentbuildermodal/AgentBuilderModal'));
 
 const App = () => {
   const { isColorModeSet, setColorMode } = useColorModes('coreui-free-react-admin-template-theme');
@@ -57,6 +58,12 @@ const App = () => {
           <Route exact path="/promptbuilder" name="Prompt Builder" element={<PromptBuilder />} />
           <Route
             exact
+            path="/template/:id"
+            name="Template Editor"
+            element={<TemplateEditor />}
+          />
+          <Route
+            exact
             path="/newprompttemplatemodal"
             name="New Prompt Template"
             element={<NewPromptTemplateModal />}
@@ -69,7 +76,7 @@ const App = () => {
             element={
               <AgentBuilderPage
                 navigateToCreateAgent={() => setIsCreatingAgent(true)}
-                navigateToAgentBuilderModal = {()=> setIsCreateAgentBuilderModal(true)}
+                navigateToAgentBuilderModal={() => setIsCreateAgentBuilderModal(true)}
               />
             }
           />
