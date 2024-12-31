@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect } from "react";
 import {
   CModal,
   CModalHeader,
@@ -10,44 +10,56 @@ import {
   CFormInput,
   CFormSelect,
   CFormTextarea,
-} from '@coreui/react';
+} from "@coreui/react";
+import { useNavigate } from "react-router-dom";
 
 const NewPromptTemplateModal = ({ show, onClose }) => {
+  const navigate = useNavigate();
+
   const [formData, setFormData] = useState({
-    templateType: '',
-    name: '',
-    apiName: '',
-    description: '',
-    object: '',
-    objectField: '',
+    templateType: "",
+    name: "",
+    apiName: "", // API Name (ID) will be renamed to "id" in the payload
+    description: "",
+    object: "",
+    objectField: "",
+    aiModel: "OpenAI", // Default AI Model
   });
 
   const [templateTypes, setTemplateTypes] = useState([]);
   const [objects, setObjects] = useState([]);
-  const [objectFields, setObjectFields] = useState([]);
+  const [fields, setFields] = useState([]);
+  const [loading, setLoading] = useState(false);
 
-  // Fetch options for Template Type, Object, and Object Field
+  // Fetch dropdown data
   useEffect(() => {
     const fetchDropdownData = async () => {
       try {
-        const templateTypeResponse = await fetch('/api/template-types'); // Replace with API endpoint
-        const objectResponse = await fetch('/api/objects'); // Replace with API endpoint
-        const objectFieldResponse = await fetch('/api/object-fields'); // Replace with API endpoint
+        const templateTypeResponse = await fetch(
+          "http://localhost:8888/api/templates/field-options"
+        );
+        const objectResponse = await fetch("http://localhost:8888/api/tables");
 
         const templateTypes = await templateTypeResponse.json();
         const objects = await objectResponse.json();
-        const objectFields = await objectFieldResponse.json();
 
         setTemplateTypes(templateTypes);
         setObjects(objects);
-        setObjectFields(objectFields);
       } catch (error) {
-        console.error('Error fetching dropdown data:', error);
+        console.error("Error fetching dropdown data:", error);
       }
     };
 
     fetchDropdownData();
   }, []);
+
+  // Update fields dropdown when object changes
+  useEffect(() => {
+    const selectedObject = objects.find(
+      (object) => object.objectName === formData.object
+    );
+    setFields(selectedObject?.fields || []);
+  }, [formData.object, objects]);
 
   // Handle form changes
   const handleChange = (e) => {
@@ -57,21 +69,43 @@ const NewPromptTemplateModal = ({ show, onClose }) => {
     });
   };
 
-  const handleSubmit = () => {
-    // Post data to backend
-    fetch('/api/templates', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(formData),
-    })
-      .then((response) => response.json())
-      .then((data) => {
-        alert('Template created successfully!');
-        onClose();
-      })
-      .catch((error) => {
-        console.error('Error creating template:', error);
+  // Handle Next button click
+  const handleNext = async () => {
+    try {
+      setLoading(true);
+
+      // Transform formData for the API payload
+      const payload = {
+        type: formData.templateType,
+        name: formData.name,
+        id: formData.apiName || formData.name.replace(/\s+/g, "-").toLowerCase(),
+        description: formData.description,
+        object: formData.object,
+        objectField: formData.objectField,
+        aiModel: formData.aiModel,
+      };
+
+      // Send POST request to create the new template
+      const response = await fetch("http://localhost:8888/api/templates", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
       });
+
+      if (!response.ok) {
+        throw new Error("Failed to create the template.");
+      }
+
+      const newTemplate = await response.json();
+
+      // Navigate to the TemplateEditor with the new template ID
+      navigate(`/template/${newTemplate.id}`);
+    } catch (error) {
+      console.error("Error creating template:", error);
+      alert("Failed to create the template. Please try again.");
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (
@@ -81,9 +115,9 @@ const NewPromptTemplateModal = ({ show, onClose }) => {
       </CModalHeader>
       <CModalBody>
         <CForm>
-          {/* Prompt Template Type */}
+          {/* Template Type */}
           <div className="mb-3">
-            <CFormLabel>Prompt Template Type</CFormLabel>
+            <CFormLabel>Template Type</CFormLabel>
             <CFormSelect
               name="templateType"
               value={formData.templateType}
@@ -91,16 +125,16 @@ const NewPromptTemplateModal = ({ show, onClose }) => {
             >
               <option value="">Select Template Type</option>
               {templateTypes.map((type, index) => (
-                <option key={index} value={type.value}>
-                  {type.label}
+                <option key={index} value={type}>
+                  {type}
                 </option>
               ))}
             </CFormSelect>
           </div>
 
-          {/* Prompt Template Name */}
+          {/* Template Name */}
           <div className="mb-3">
-            <CFormLabel>Prompt Template Name</CFormLabel>
+            <CFormLabel>Template Name</CFormLabel>
             <CFormInput
               name="name"
               value={formData.name}
@@ -112,13 +146,12 @@ const NewPromptTemplateModal = ({ show, onClose }) => {
 
           {/* API Name */}
           <div className="mb-3">
-            <CFormLabel>API Name</CFormLabel>
+            <CFormLabel>API Name (ID)</CFormLabel>
             <CFormInput
               name="apiName"
               value={formData.apiName}
               onChange={handleChange}
-              placeholder="Enter API name"
-              required
+              placeholder="Enter API name or leave blank to auto-generate"
             />
           </div>
 
@@ -144,8 +177,8 @@ const NewPromptTemplateModal = ({ show, onClose }) => {
             >
               <option value="">Select Object</option>
               {objects.map((object, index) => (
-                <option key={index} value={object.value}>
-                  {object.label}
+                <option key={index} value={object.objectName}>
+                  {object.objectName}
                 </option>
               ))}
             </CFormSelect>
@@ -158,11 +191,12 @@ const NewPromptTemplateModal = ({ show, onClose }) => {
               name="objectField"
               value={formData.objectField}
               onChange={handleChange}
+              disabled={!fields.length}
             >
               <option value="">Select Object Field</option>
-              {objectFields.map((field, index) => (
-                <option key={index} value={field.value}>
-                  {field.label}
+              {fields.map((field, index) => (
+                <option key={index} value={field}>
+                  {field}
                 </option>
               ))}
             </CFormSelect>
@@ -170,11 +204,11 @@ const NewPromptTemplateModal = ({ show, onClose }) => {
         </CForm>
       </CModalBody>
       <CModalFooter>
-        <CButton color="secondary" onClick={onClose}>
+        <CButton color="secondary" onClick={onClose} disabled={loading}>
           Cancel
         </CButton>
-        <CButton color="primary" onClick={handleSubmit}>
-          Save
+        <CButton color="primary" onClick={handleNext} disabled={loading}>
+          {loading ? "Processing..." : "Next"}
         </CButton>
       </CModalFooter>
     </CModal>

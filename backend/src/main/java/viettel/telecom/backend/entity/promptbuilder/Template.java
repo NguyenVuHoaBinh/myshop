@@ -28,6 +28,15 @@ public class Template {
     private String name;
 
     @Field(type = FieldType.Text)
+    @NotBlank(message = "Object name cannot be blank")
+    private String object;
+
+    @Field(type = FieldType.Text)
+    @NotBlank(message = "Object field cannot be blank")
+    private String objectField;
+
+
+    @Field(type = FieldType.Text)
     @NotBlank(message = "Description cannot be blank")
     private String description;
 
@@ -36,12 +45,9 @@ public class Template {
     private String type;
 
     @Field(type = FieldType.Nested)
-    @NotNull(message = "Fields cannot be null")
-    @Size(min = 1, message = "Fields must have at least one entry")
     private List<FieldMapping> fields;
 
     @Field(type = FieldType.Text)
-    @NotBlank(message = "System prompt cannot be blank")
     private String systemPrompt;
 
     @JsonFormat(shape = JsonFormat.Shape.STRING, pattern = "yyyy-MM-dd")

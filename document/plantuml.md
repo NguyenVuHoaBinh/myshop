@@ -88,3 +88,68 @@ Ingestion APIs:
 - Fetch History
 end note
 @enduml
+
+
+@startuml
+title Template Management Flow
+
+actor User
+participant "TemplateController" as Controller
+participant "TemplateService" as Service
+participant "TemplateRepository" as Repository
+participant "Elasticsearch" as DB
+
+' Create Template
+User -> Controller: POST /api/templates
+Controller -> Service: createTemplate(template)
+Service -> Repository: save(template)
+Repository -> DB: Insert template document
+DB --> Repository: Template ID
+Repository --> Service: Saved Template
+Service --> Controller: Response (Saved Template)
+Controller --> User: HTTP 201 Created
+
+' Update Template
+User -> Controller: PUT /api/templates/{id}
+Controller -> Service: updateTemplate(id, updatedTemplate)
+Service -> Repository: findById(id)
+Repository -> DB: Retrieve template by ID
+DB --> Repository: Template Document
+Repository --> Service: Existing Template
+Service -> Repository: save(updatedTemplate)
+Repository -> DB: Update template document
+DB --> Repository: Updated Template Document
+Repository --> Service: Updated Template
+Service --> Controller: Response (Updated Template)
+Controller --> User: HTTP 200 OK
+
+' Get Template by ID
+User -> Controller: GET /api/templates/{id}
+Controller -> Service: getTemplate(id)
+Service -> Repository: findById(id)
+Repository -> DB: Retrieve template by ID
+DB --> Repository: Template Document
+Repository --> Service: Template
+Service --> Controller: Response (Template)
+Controller --> User: HTTP 200 OK
+
+' Get All Templates
+User -> Controller: GET /api/templates
+Controller -> Service: getAllTemplates(page, size, sortBy, sortDir)
+Service -> Repository: findAll(PageRequest)
+Repository -> DB: Retrieve paginated templates
+DB --> Repository: Paginated Templates
+Repository --> Service: Page<Template>
+Service --> Controller: Response (Paginated Templates)
+Controller --> User: HTTP 200 OK
+
+' Delete Template
+User -> Controller: DELETE /api/templates/{id}
+Controller -> Service: deleteTemplate(id)
+Service -> Repository: deleteById(id)
+Repository -> DB: Delete template by ID
+DB --> Repository: Acknowledgement
+Repository --> Service: Success
+Service --> Controller: HTTP 204 No Content
+Controller --> User: HTTP 204 No Content
+@enduml
