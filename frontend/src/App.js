@@ -3,7 +3,6 @@ import { HashRouter, Route, Routes, Navigate } from 'react-router-dom';
 import { useSelector } from 'react-redux';
 import { CSpinner, useColorModes } from '@coreui/react';
 import './scss/style.scss';
-import './scss/examples.scss'; // Remove this in production if not needed
 
 // Lazy-loaded Components
 const DefaultLayout = React.lazy(() => import('./layout/DefaultLayout'));
@@ -20,6 +19,8 @@ const NewPromptTemplateModal = React.lazy(() =>
   import('./views/newprompttemplatemodal/NewPromptTemplateModal')
 );
 const AgentBuilderModal = React.lazy(() => import('./views/agentbuildermodal/AgentBuilderModal'));
+const FlowManager = React.lazy(() => import('./views/flowbuilder/FlowManager'));
+const FlowEditor = React.lazy(() => import('./views/flowbuilder/FlowEditor'));
 
 const App = () => {
   const { isColorModeSet, setColorMode } = useColorModes('coreui-free-react-admin-template-theme');
@@ -29,7 +30,7 @@ const App = () => {
   const [isCreateAgentBuilderModal, setIsCreateAgentBuilderModal] = useState(false);
 
   useEffect(() => {
-    // Handle theme based on URL parameters or stored theme
+    // Manage theme based on URL parameters or stored preferences
     const urlParams = new URLSearchParams(window.location.href.split('?')[1]);
     const theme = urlParams.get('theme')?.match(/^[A-Za-z0-9\s]+/)?.[0];
 
@@ -54,7 +55,11 @@ const App = () => {
           <Route exact path="/404" name="Page 404" element={<Page404 />} />
           <Route exact path="/500" name="Page 500" element={<Page500 />} />
 
-          {/* Application Routes */}
+          {/* Flow Management Routes */}
+          <Route exact path="/flowbuilder" name="Flow Manager" element={<FlowManager />} />
+          <Route exact path="/floweditor" name="Flow Editor" element={<FlowEditor />} />
+
+          {/* Prompt and Template Management */}
           <Route exact path="/promptbuilder" name="Prompt Builder" element={<PromptBuilder />} />
           <Route
             exact
@@ -68,6 +73,8 @@ const App = () => {
             name="New Prompt Template"
             element={<NewPromptTemplateModal />}
           />
+
+          {/* Agent Management */}
           <Route exact path="/agentaction" name="Agent Action" element={<AgentAction />} />
           <Route
             exact

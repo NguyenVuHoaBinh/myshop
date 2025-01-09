@@ -49,6 +49,16 @@ const _nav = [
   },
   {
     component: CNavItem,
+    name: 'Flow Builder',
+    to: '/flowbuilder',
+    icon: <CIcon icon={cilSpeedometer} customClassName="nav-icon" />,
+    badge: {
+      color: 'info',
+      text: 'NEW',
+    },
+  },
+  {
+    component: CNavItem,
     name: 'Agent Builder',
     to: '/agentbuilderpage',
     icon: <CIcon icon={cilSpeedometer} customClassName="nav-icon" />,

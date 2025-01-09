@@ -73,8 +73,8 @@ const TemplateEditor = () => {
   };
 
   const handlePreview = async () => {
-    setPreviewLoading(true); // Start loading
-    setPreviewResult(null); // Clear the previous result
+    setPreviewLoading(true);
+    setPreviewResult(null);
     try {
       const response = await fetch("http://localhost:8888/api/v1/ai/preview", {
         method: "POST",
@@ -82,12 +82,12 @@ const TemplateEditor = () => {
         body: JSON.stringify({
           modelType: template.aiModel || "openai",
           templateId: id,
-          message: "Generate sample result for the system role", // Replace with dynamic input
+          message: "Generate sample result for the system role",
           config: {
             temperature: 0.7,
             max_tokens: 150,
           },
-        }), // Removed resolution from the payload
+        }),
       });
 
       if (!response.ok) {
@@ -95,12 +95,12 @@ const TemplateEditor = () => {
       }
 
       const data = await response.json();
-      setPreviewResult(data); // Set the preview result
+      setPreviewResult(data);
     } catch (err) {
       console.error(err);
       alert("Failed to generate preview. Please try again.");
     } finally {
-      setPreviewLoading(false); // Stop loading
+      setPreviewLoading(false);
     }
   };
 
@@ -124,7 +124,7 @@ const TemplateEditor = () => {
     <CContainer className="mt-4">
       {/* Save and Return Buttons */}
       <div className="d-flex justify-content-between mb-3">
-        <CButton color="secondary" onClick={() => navigate("/promptbuilder")}>
+        <CButton color="secondary" onClick={() => navigate("/")}>
           Return
         </CButton>
         <CButton color="success" onClick={handleSave}>
@@ -168,12 +168,18 @@ const TemplateEditor = () => {
                 <CCol>
                   <CFormLabel>Object Field</CFormLabel>
                   <CFormSelect
-                    value={template.objectField || ""}
-                    onChange={(e) => handleInputChange("objectField", e.target.value)}
+                    value={`${template.object || ""}.${template.objectField || ""}`}
+                    onChange={(e) => {
+                      const [object, objectField] = e.target.value.split(".");
+                      setTemplate({ ...template, object, objectField });
+                    }}
                   >
                     <option value="">Select an object field...</option>
-                    <option value="Field 1">Field 1</option>
-                    <option value="Field 2">Field 2</option>
+                    {template.objectFields?.map((field, index) => (
+                      <option key={index} value={`${template.object || "object"}.${field}`}>
+                        {`${template.object || "object"}.${field}`}
+                      </option>
+                    ))}
                   </CFormSelect>
                 </CCol>
               </CRow>
