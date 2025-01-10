@@ -23,7 +23,7 @@ const FlowManager = () => {
   const [currentFlow, setCurrentFlow] = useState(null);
   const [toast, setToast] = useState(null);
 
-  const API_BASE_URL = "/api/v1/flows";
+  const API_BASE_URL = "http://localhost:8888/api/v1/flows";
   const navigate = useNavigate(); // Initialize navigation
 
   const columns = React.useMemo(
@@ -141,7 +141,7 @@ const FlowManager = () => {
         <h5>Flow Manager</h5>
         <CButton
           color="primary"
-          onClick={() => navigate("/floweditor/new")} // Redirect to FlowEditor for creating a new flow
+          onClick={() => navigate("/floweditor")} // Redirect to FlowEditor for creating a new flow
         >
           Create New Flow
         </CButton>

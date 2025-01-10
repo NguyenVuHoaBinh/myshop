@@ -80,4 +80,15 @@ public class FlowService {
         Flow flow = getFlow(flowId);
         flowExecutor.executeFlow(flow, initialContext, session);
     }
+
+    public List<Flow> getAllFlows() throws IOException {
+        SearchResponse<Flow> response = elasticsearchClient.search(s -> s
+                .index("flows")
+                .query(q -> q.matchAll(m -> m)), Flow.class);
+
+        return response.hits().hits().stream()
+                .map(hit -> hit.source())
+                .collect(Collectors.toList());
+    }
+
 }

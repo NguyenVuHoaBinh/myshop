@@ -29,6 +29,24 @@ public class FlowController {
         this.logManagementService = logManagementService;
     }
 
+    @GetMapping
+    public ResponseEntity<Map<String, Object>> getAllFlows() {
+        try {
+            List<Flow> flows = flowService.getAllFlows();
+            Map<String, Object> response = new HashMap<>();
+            response.put("flows", flows);
+            response.put("message", "All flows retrieved successfully");
+            response.put("timestamp", LocalDateTime.now());
+            return ResponseEntity.ok(response);
+        } catch (Exception e) {
+            Map<String, Object> errorResponse = new HashMap<>();
+            errorResponse.put("error", e.getMessage());
+            errorResponse.put("timestamp", LocalDateTime.now());
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(errorResponse);
+        }
+    }
+
+
     @PostMapping
     public ResponseEntity<Map<String, Object>> createFlow(@Valid @RequestBody Flow flow) {
         try {

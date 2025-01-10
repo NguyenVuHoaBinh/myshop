@@ -21,3 +21,18 @@
   .custom-node.data-node {
     background-color: #e3f2fd;
   }
+  .custom-node.start-node {
+    background-color: #dff9fb;
+    border: 2px solid #22a6b3;
+    padding: 10px;
+    border-radius: 10px;
+    text-align: center;
+  }
+  
+  .custom-node.end-node {
+    background-color: #f8b8b8;
+    border: 2px solid #eb4d4b;
+    padding: 10px;
+    border-radius: 10px;
+    text-align: center;
+  }
