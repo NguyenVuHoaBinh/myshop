@@ -1,221 +1,151 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { ReactFlow, useNodesState, useEdgesState, addEdge, Handle, Position, Background, Controls, MiniMap } from '@xyflow/react';
+import {
+  ReactFlow,
+  useNodesState,
+  useEdgesState,
+  addEdge,
+  Background,
+  Controls,
+  MiniMap,
+} from '@xyflow/react';
 import '@xyflow/react/dist/style.css';
-import { v4 as uuidv4 } from 'uuid';
-import axios from 'axios';
-import Draggable from 'react-draggable';
+import axios from '../../api/axiosInstance';
+import Sidebar from './Sidebar';
+import Toolbar from './Toolbar';
+import nodeTypes from '../nodes'; // Import custom node types
 import './FlowEditor.css';
 
-// --- Custom Node Components ---
-const StartNode = () => (
-  <div className="custom-node start-node">
-    <strong>Start Node</strong>
-    {/* Only Source Handle (No Target Handle) */}
-    <Handle type="source" position={Position.Bottom} />
-  </div>
-);
-
-const EndNode = () => (
-  <div className="custom-node end-node">
-    <strong>End Node</strong>
-    {/* Only Target Handle (No Source Handle) */}
-    <Handle type="target" position={Position.Top} />
-  </div>
-);
-
-const InteractionNode = ({ data }) => (
-  <div className="custom-node interaction-node">
-    <strong>Interaction Node</strong>
-    <div>Prompt: {data.prompt || 'N/A'}</div>
-    <Handle type="target" position={Position.Top} />
-    <Handle type="source" position={Position.Bottom} />
-  </div>
-);
-
-const LLMNode = ({ data }) => (
-  <div className="custom-node llm-node">
-    <strong>LLM Node</strong>
-    <div>Template ID: {data.templateId || 'N/A'}</div>
-    <div>AI Model: {data.aiModel || 'N/A'}</div>
-    <Handle type="target" position={Position.Top} />
-    <Handle type="source" position={Position.Bottom} />
-  </div>
-);
-
-const LogicNode = ({ data }) => (
-  <div className="custom-node logic-node">
-    <strong>Logic Node</strong>
-    <div>Condition: {data.condition || 'None'}</div>
-    <Handle type="target" position={Position.Top} />
-    <Handle type="source" position={Position.Bottom} id="true" />
-    <Handle type="source" position={Position.Bottom} id="false" />
-  </div>
-);
-
-const DataNode = ({ data }) => (
-  <div className="custom-node data-node">
-    <strong>Data Node</strong>
-    <div>Key: {data.key || 'N/A'}</div>
-    <div>Value: {data.value || 'N/A'}</div>
-    <Handle type="target" position={Position.Top} />
-    <Handle type="source" position={Position.Bottom} />
-  </div>
-);
-
-// --- Node Types Mapping ---
-const nodeTypes = {
-  startNode: StartNode,
-  endNode: EndNode,
-  interactionNode: InteractionNode,
-  llmNode: LLMNode,
-  logicNode: LogicNode,
-  dataNode: DataNode,
-};
-
 const FlowEditor = ({ flowId, onSave }) => {
-  const [nodes, setNodes, onNodesChange] = useNodesState([]);
-  const [edges, setEdges, onEdgesChange] = useEdgesState([]);
-  const [selectedNode, setSelectedNode] = useState(null);
+  const [nodes, setNodes, onNodesChange] = useNodesState([]); // ReactFlow nodes state
+  const [edges, setEdges, onEdgesChange] = useEdgesState([]); // ReactFlow edges state
+  const [templates, setTemplates] = useState([]); // Store templates globally
+  const [selectedNode, setSelectedNode] = useState(null); // Currently selected node in the graph
 
-  // --- Fetch Existing Flow ---
+  // Fetch templates only once when the editor is mounted
+  useEffect(() => {
+    const fetchTemplates = async () => {
+      try {
+        const response = await axios.get('/api/templates');
+        setTemplates(response.data.content || []); // Assuming templates are in `content`
+      } catch (error) {
+        console.error('Error fetching templates:', error);
+      }
+    };
+
+    fetchTemplates();
+  }, []);
+
+  // Add a new node with templates to the graph
+  const addNodeWithTemplates = (type) => {
+    const newNode = {
+      id: `node-${Date.now()}`, // Unique node ID
+      type,
+      position: { x: Math.random() * 250, y: Math.random() * 400 },
+      data: {
+        label: `${type} Node`,
+        templateId: '', // No template selected by default
+        selectedTemplate: null, // Will be populated later based on selection
+        onChange: (updatedNodeData) => {
+          // Callback to update the node
+          setNodes((nodes) =>
+            nodes.map((node) =>
+              node.id === updatedNodeData.id
+                ? { ...node, data: { ...updatedNodeData.data } }
+                : node
+            )
+          );
+        },
+      },
+    };
+
+    setNodes((nodes) => [...nodes, newNode]);
+  };
+
+  // Fetch flow data when loading a flow (if flowId is set)
   const fetchFlow = useCallback(async () => {
     try {
       const response = await axios.get(`/api/v1/flows/${flowId}`);
-      const { nodes, edges } = response.data;
-      setNodes(nodes || []);
+      const { nodes: fetchedNodes, edges } = response.data;
+
+      const updatedNodes = fetchedNodes.map((node) => ({
+        ...node,
+        data: {
+          ...node.data,
+          onChange: (updatedNodeData) => {
+            setNodes((nds) =>
+              nds.map((n) =>
+                n.id === updatedNodeData.id
+                  ? { ...n, data: { ...updatedNodeData.data } }
+                  : n
+              )
+            );
+          },
+        },
+      }));
+
+      setNodes(updatedNodes || []);
       setEdges(edges || []);
     } catch (error) {
       console.error('Error fetching flow:', error);
     }
   }, [flowId]);
 
-  // --- Save Current Flow ---
-  const saveFlow = useCallback(async () => {
-    try {
-      const graphData = { nodes, edges };
-      await axios.post('/api/v1/flows', graphData);
-      alert('Flow saved successfully!');
-      if (onSave) onSave(graphData);
-    } catch (error) {
-      console.error('Error saving flow:', error);
-    }
-  }, [nodes, edges, onSave]);
-
-  // --- Add a New Node ---
-  const addNode = useCallback(
-    (type) => {
-      // Limit to only one Start and End Node
-      if (type === 'startNode' && nodes.some((node) => node.type === 'startNode')) {
-        alert('There can be only one Start Node!');
-        return;
-      }
-      if (type === 'endNode' && nodes.some((node) => node.type === 'endNode')) {
-        alert('There can be only one End Node!');
-        return;
-      }
-      const newNode = {
-        id: uuidv4(),
-        type,
-        position: { x: 100 + nodes.length * 50, y: 100 },
-        data: { label: `${type} Node` },
-      };
-      setNodes((nds) => nds.concat(newNode));
-    },
-    [nodes, setNodes],
-  );
-
-  // --- Handle Node Click (for Selecting a Node) ---
-  const handleNodeClick = useCallback((event, node) => {
-    setSelectedNode(node);
-  }, []);
-
-  // --- Delete Selected Node and Its Edges ---
-  const deleteNode = useCallback(() => {
-    if (!selectedNode) return;
-
-    // Remove the selected node and its edges
-    setNodes((nds) => nds.filter((node) => node.id !== selectedNode.id));
-    setEdges((eds) =>
-      eds.filter((edge) => edge.source !== selectedNode.id && edge.target !== selectedNode.id),
-    );
-
-    // Clear the selected node
-    setSelectedNode(null);
-  }, [selectedNode, setNodes, setEdges]);
-
-  // --- Fetch the Flow When Component Mounts ---
   useEffect(() => {
     if (flowId) fetchFlow();
   }, [flowId, fetchFlow]);
 
   return (
     <div style={{ display: 'flex', height: '100vh' }}>
-      {/* Draggable Sidebar */}
-      <Draggable>
-        <div
-          style={{
-            width: '300px',
-            padding: '10px',
-            borderRight: '1px solid #ccc',
-            background: '#f9f9f9',
-          }}
-        >
-          <h4>Node Properties</h4>
-          {selectedNode ? (
-            <div>
-              <p>ID: {selectedNode.id}</p>
-              <label>
-                Label:
-                <input
-                  type="text"
-                  value={selectedNode.data.label || ''}
-                  onChange={(e) =>
-                    setNodes((nds) =>
-                      nds.map((node) =>
-                        node.id === selectedNode.id
-                          ? { ...node, data: { ...node.data, label: e.target.value } }
-                          : node,
-                      ),
-                    )
-                  }
-                />
-              </label>
-            </div>
-          ) : (
-            <p>Select a node to edit properties.</p>
-          )}
-        </div>
-      </Draggable>
-
-      {/* Main Flow Editor Area */}
+      {/* Inject Sidebar with Template Selection */}
+      <Sidebar
+        selectedNode={selectedNode} // Pass currently selected node
+        templates={templates} // Pass the global templates list
+        onUpdateNodeData={(updatedNode) =>
+          setNodes((nds) =>
+            nds.map((node) =>
+              node.id === updatedNode.id
+                ? { ...node, data: updatedNode.data }
+                : node
+            )
+          )
+        }
+      />
       <div style={{ flex: 1, position: 'relative' }}>
         <ReactFlow
           nodes={nodes}
           edges={edges}
           onNodesChange={onNodesChange}
           onEdgesChange={onEdgesChange}
-          onConnect={(params) => setEdges((eds) => addEdge(params, eds))}
-          onNodeClick={handleNodeClick}
+          onConnect={(params) =>
+            setEdges((eds) =>
+              addEdge(
+                {
+                  ...params,
+                  type: 'smoothstep',
+                  arrowHeadType: 'arrow',
+                  style: { strokeWidth: 3, stroke: '#888' },
+                },
+                eds
+              )
+            )
+          }
+          onNodeClick={(event, node) => setSelectedNode(node)}
           nodeTypes={nodeTypes}
         >
           <Background gap={16} />
           <MiniMap />
           <Controls />
         </ReactFlow>
-
-        {/* Toolbar */}
-        <div style={{ position: 'absolute', top: 10, right: 10, display: 'flex', gap: '10px' }}>
-          <button onClick={() => addNode('startNode')}>Add Start Node</button>
-          <button onClick={() => addNode('endNode')}>Add End Node</button>
-          <button onClick={() => addNode('interactionNode')}>Add Interaction Node</button>
-          <button onClick={() => addNode('llmNode')}>Add LLM Node</button>
-          <button onClick={() => addNode('logicNode')}>Add Logic Node</button>
-          <button onClick={() => addNode('dataNode')}>Add Data Node</button>
-          <button onClick={saveFlow}>Save Flow</button>
-          <button onClick={deleteNode} disabled={!selectedNode}>
-            Delete Node
-          </button>
-        </div>
+        {/* Toolbar for controls */}
+        <Toolbar
+          onSave={() => console.log('Save Triggered')}
+          setNodes={setNodes}
+          onDeleteNode={() =>
+            setNodes((nds) => nds.filter((node) => node.id !== selectedNode.id))
+          }
+          addNode={addNodeWithTemplates}
+          isDeleteDisabled={!selectedNode}
+        />
       </div>
     </div>
   );

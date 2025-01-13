@@ -36,3 +36,31 @@
     border-radius: 10px;
     text-align: center;
   }
+
+  /* Handles */
+.react-flow__handle {
+  border-radius: 50%;
+  cursor: pointer;
+}
+
+.react-flow__handle-target {
+  height: 12px;
+  width: 12px;
+  border: 2px solid red;
+}
+
+.react-flow__handle-source {
+  height: 12px;
+  width: 12px;
+  border: 2px solid green;
+}
+
+/* Edges */
+.react-flow__edge-path {
+  stroke-width: 3 !important;
+  stroke: #888;
+}
+
+.react-flow__edge-arrowhead {
+  fill: rgba(185, 25, 25, 0.533); /* Arrows color */
+}

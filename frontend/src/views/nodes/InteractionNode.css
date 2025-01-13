@@ -1,0 +1,37 @@
+.custom-node.interaction-node {
+    border: 1px solid #bbb;
+    padding: 10px;
+    background: white;
+  }
+  
+  .custom-node.fallback {
+    border-color: red;
+  }
+  
+  .input-section input,
+  .input-section select {
+    width: 100%;
+    margin-bottom: 10px;
+  }
+  
+  .error-message {
+    color: red;
+    font-size: 0.9em;
+  }
+  
+  .footer-section {
+    margin-top: 10px;
+  }
+
+  .custom-node {
+    padding: 10px;
+    border: 1px solid #ccc;
+    border-radius: 5px;
+    background-color: #fefefe;
+  }
+  
+  .custom-node.interaction-node {
+    background-color: #e6f7ff;
+    border-color: #91d5ff;
+  }
+  
