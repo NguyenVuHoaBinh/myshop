@@ -1,7 +1,16 @@
 import React, { useState, useEffect } from 'react';
 import Draggable from 'react-draggable';
 
-const Sidebar = ({ selectedNode, onUpdateNodeData, templates = [] }) => {
+const Sidebar = ({
+  selectedNode,
+  onUpdateNodeData,
+  templates = [],
+  flowName,
+  description,
+  setFlowName,
+  setDescription,
+}) => {
+  // Node-specific state
   const [name, setName] = useState('');
   const [label, setLabel] = useState('');
   const [botResponse, setBotResponse] = useState('');
@@ -9,9 +18,11 @@ const Sidebar = ({ selectedNode, onUpdateNodeData, templates = [] }) => {
   const [options, setOptions] = useState([]);
   const [selectedTemplateId, setSelectedTemplateId] = useState('');
 
+  // Synchronize the node's data with the state
   useEffect(() => {
     if (selectedNode) {
-      const { name, label, botResponse, inputType, options, templateId } = selectedNode.data || {};
+      const { name, label, botResponse, inputType, options, templateId } =
+        selectedNode.data || {};
       setName(name || '');
       setLabel(label || '');
       setBotResponse(botResponse || '');
@@ -21,6 +32,7 @@ const Sidebar = ({ selectedNode, onUpdateNodeData, templates = [] }) => {
     }
   }, [selectedNode]);
 
+  // Handlers for node-specific fields
   const handleNameChange = (value) => {
     setName(value);
     onUpdateNodeData({
@@ -49,7 +61,11 @@ const Sidebar = ({ selectedNode, onUpdateNodeData, templates = [] }) => {
     setInputType(type);
     onUpdateNodeData({
       ...selectedNode,
-      data: { ...selectedNode.data, inputType: type, options: type === 'text' ? [] : options },
+      data: {
+        ...selectedNode.data,
+        inputType: type,
+        options: type === 'text' ? [] : options,
+      },
     });
   };
 
@@ -65,7 +81,9 @@ const Sidebar = ({ selectedNode, onUpdateNodeData, templates = [] }) => {
 
   const handleTemplateChange = (templateId) => {
     setSelectedTemplateId(templateId);
-    const selectedTemplate = templates.find((template) => template.id === templateId);
+    const selectedTemplate = templates.find(
+      (template) => template.id === templateId
+    );
     onUpdateNodeData({
       ...selectedNode,
       data: {
@@ -89,23 +107,6 @@ const Sidebar = ({ selectedNode, onUpdateNodeData, templates = [] }) => {
     });
   };
 
-  if (!selectedNode) {
-    return (
-      <Draggable>
-        <div
-          style={{
-            width: '300px',
-            padding: '10px',
-            borderRight: '1px solid #ccc',
-            background: '#f9f9f9',
-          }}
-        >
-          <p>Select a node to edit properties.</p>
-        </div>
-      </Draggable>
-    );
-  }
-
   return (
     <Draggable>
       <div
@@ -114,87 +115,195 @@ const Sidebar = ({ selectedNode, onUpdateNodeData, templates = [] }) => {
           padding: '10px',
           borderRight: '1px solid #ccc',
           background: '#f9f9f9',
+          height: '100%',
+          overflowY: 'auto',
         }}
       >
-        <h4>Node Properties</h4>
-        <div>
-          <label>Name:</label>
+        {/* Flow-Level Metadata Section */}
+        <h4>Flow Metadata</h4>
+        <div style={{ marginBottom: '10px' }}>
+          <label style={{ display: 'block', marginBottom: '5px' }}>
+            Flow Name:
+          </label>
           <input
             type="text"
-            value={name}
-            onChange={(e) => handleNameChange(e.target.value)}
-            placeholder="Enter node name..."
+            value={flowName}
+            onChange={(e) => setFlowName(e.target.value)}
+            placeholder="Enter flow name..."
+            style={{
+              width: '100%',
+              padding: '5px',
+              fontSize: '14px',
+              marginBottom: '10px',
+            }}
           />
         </div>
-        <div>
-          <label>Label:</label>
-          <input
-            type="text"
-            value={label}
-            onChange={(e) => handleLabelChange(e.target.value)}
-            placeholder="Enter node label..."
+        <div style={{ marginBottom: '20px' }}>
+          <label style={{ display: 'block', marginBottom: '5px' }}>
+            Flow Description:
+          </label>
+          <textarea
+            value={description}
+            onChange={(e) => setDescription(e.target.value)}
+            placeholder="Enter flow description..."
+            style={{
+              width: '100%',
+              height: '60px',
+              padding: '5px',
+              fontSize: '14px',
+            }}
           />
         </div>
 
-        {selectedNode.type === 'interactionNode' && (
+        {/* Node-Level Properties Section */}
+        {selectedNode ? (
           <>
+            <h4>Node Properties</h4>
             <div>
-              <label>Bot Response:</label>
-              <textarea
-                value={botResponse}
-                onChange={(e) => handleBotResponseChange(e.target.value)}
-                placeholder="Enter bot response..."
+              <label>Name:</label>
+              <input
+                type="text"
+                value={name}
+                onChange={(e) => handleNameChange(e.target.value)}
+                placeholder="Enter node name..."
+                style={{
+                  width: '100%',
+                  padding: '5px',
+                  fontSize: '14px',
+                  marginBottom: '10px',
+                }}
               />
             </div>
             <div>
-              <label>Input Type:</label>
-              <select
-                value={inputType}
-                onChange={(e) => handleInputTypeChange(e.target.value)}
-              >
-                <option value="text">Text</option>
-                <option value="dropdown">Dropdown</option>
-                <option value="radio">Radio Buttons</option>
-              </select>
+              <label>Label:</label>
+              <input
+                type="text"
+                value={label}
+                onChange={(e) => handleLabelChange(e.target.value)}
+                placeholder="Enter node label..."
+                style={{
+                  width: '100%',
+                  padding: '5px',
+                  fontSize: '14px',
+                  marginBottom: '10px',
+                }}
+              />
             </div>
-            {(inputType === 'dropdown' || inputType === 'radio') && (
-              <div>
-                <label>Options:</label>
-                {options.map((option, index) => (
-                  <div key={index} style={{ display: 'flex', alignItems: 'center' }}>
-                    <input
-                      type="text"
-                      value={option}
-                      onChange={(e) => handleOptionsChange(index, e.target.value)}
-                      placeholder={`Option ${index + 1}`}
-                    />
-                    <button onClick={() => removeOption(index)}>Remove</button>
+            {selectedNode.type === 'interactionNode' && (
+              <>
+                <div>
+                  <label>Bot Response:</label>
+                  <textarea
+                    value={botResponse}
+                    onChange={(e) => handleBotResponseChange(e.target.value)}
+                    placeholder="Enter bot response..."
+                    style={{
+                      width: '100%',
+                      height: '60px',
+                      padding: '5px',
+                      fontSize: '14px',
+                      marginBottom: '10px',
+                    }}
+                  />
+                </div>
+                <div>
+                  <label>Input Type:</label>
+                  <select
+                    value={inputType}
+                    onChange={(e) => handleInputTypeChange(e.target.value)}
+                    style={{
+                      width: '100%',
+                      padding: '5px',
+                      fontSize: '14px',
+                      marginBottom: '10px',
+                    }}
+                  >
+                    <option value="text">Text</option>
+                    <option value="dropdown">Dropdown</option>
+                    <option value="radio">Radio Buttons</option>
+                  </select>
+                </div>
+                {(inputType === 'dropdown' || inputType === 'radio') && (
+                  <div>
+                    <label>Options:</label>
+                    {options.map((option, index) => (
+                      <div
+                        key={index}
+                        style={{
+                          display: 'flex',
+                          alignItems: 'center',
+                          marginBottom: '5px',
+                        }}
+                      >
+                        <input
+                          type="text"
+                          value={option}
+                          onChange={(e) =>
+                            handleOptionsChange(index, e.target.value)
+                          }
+                          placeholder={`Option ${index + 1}`}
+                          style={{
+                            flex: '1',
+                            padding: '5px',
+                            fontSize: '14px',
+                          }}
+                        />
+                        <button
+                          onClick={() => removeOption(index)}
+                          style={{
+                            marginLeft: '5px',
+                            padding: '5px',
+                            cursor: 'pointer',
+                          }}
+                        >
+                          Remove
+                        </button>
+                      </div>
+                    ))}
+                    <button
+                      onClick={addOption}
+                      style={{
+                        padding: '5px',
+                        cursor: 'pointer',
+                        marginTop: '5px',
+                      }}
+                    >
+                      Add Option
+                    </button>
                   </div>
-                ))}
-                <button onClick={addOption}>Add Option</button>
-              </div>
+                )}
+              </>
+            )}
+            {selectedNode.type === 'llmNode' && (
+              <>
+                <div>
+                  <label htmlFor="template-select">Choose Template:</label>
+                  <select
+                    id="template-select"
+                    value={selectedTemplateId}
+                    onChange={(e) =>
+                      handleTemplateChange(e.target.value)
+                    }
+                    style={{
+                      width: '100%',
+                      padding: '5px',
+                      fontSize: '14px',
+                      marginBottom: '10px',
+                    }}
+                  >
+                    <option value="">Select a template</option>
+                    {templates.map((template) => (
+                      <option key={template.id} value={template.id}>
+                        {template.name}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              </>
             )}
           </>
-        )}
-
-        {selectedNode.type === 'llmNode' && (
-          <>
-            <div>
-              <label htmlFor="template-select">Choose Template:</label>
-              <select
-                id="template-select"
-                value={selectedTemplateId}
-                onChange={(e) => handleTemplateChange(e.target.value)}
-              >
-                <option value="">Select a template</option>
-                {templates.map((template) => (
-                  <option key={template.id} value={template.id}>
-                    {template.name}
-                  </option>
-                ))}
-              </select>
-            </div>
-          </>
+        ) : (
+          <p>Select a node to edit properties.</p>
         )}
       </div>
     </Draggable>

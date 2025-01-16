@@ -6,6 +6,7 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.socket.WebSocketSession;
 import viettel.telecom.backend.entity.flow.Flow;
+import viettel.telecom.backend.entity.flow.FlowSummary;
 import viettel.telecom.backend.service.flow.FlowExecutor;
 import viettel.telecom.backend.service.flow.FlowService;
 import viettel.telecom.backend.service.logging.LogManagementService;
@@ -20,26 +21,32 @@ import java.util.Map;
 public class FlowController {
 
     private final FlowService flowService;
-    private final FlowExecutor flowExecutor;
-    private final LogManagementService logManagementService;
+    private final FlowExecutor flowExecutor;        // example usage
+    private final LogManagementService logService;  // example usage
 
     @Autowired
-    public FlowController(FlowService flowService, FlowExecutor flowExecutor, LogManagementService logManagementService) {
+    public FlowController(FlowService flowService,
+                          FlowExecutor flowExecutor,
+                          LogManagementService logService) {
         this.flowService = flowService;
         this.flowExecutor = flowExecutor;
-        this.logManagementService = logManagementService;
+        this.logService = logService;
     }
 
-    // Create a new flow
+    // ================ 1) CREATE  ================
     @PostMapping
-    public ResponseEntity<Map<String, Object>> createFlow(@RequestBody Flow flow) {
+    public ResponseEntity<?> createFlow(@RequestBody Flow flow) {
         try {
-            String flowId = flowService.createFlow(flow);
+            String newFlowId = flowService.createFlow(flow);
+            // Fetch the created flow to return it in the response
+            Flow createdFlow = flowService.getFlow(newFlowId);
+
             Map<String, Object> response = new HashMap<>();
-            response.put("flowId", flowId);
+            response.put("flow", createdFlow);
             response.put("message", "Flow created successfully");
             response.put("timestamp", LocalDateTime.now());
-            return ResponseEntity.status(HttpStatus.CREATED).body(response);
+            return new ResponseEntity<>(response, HttpStatus.CREATED);
+
         } catch (Exception e) {
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(Map.of(
                     "error", e.getMessage(),
@@ -48,19 +55,25 @@ public class FlowController {
         }
     }
 
-    // Update an existing flow
+    // ================ 2) UPDATE  ================
     @PutMapping("/{flowId}")
-    public ResponseEntity<Map<String, Object>> updateFlow(@PathVariable String flowId, @RequestBody Flow updatedFlow) {
+    public ResponseEntity<?> updateFlow(@PathVariable String flowId, @RequestBody Flow updatedFlow) {
         try {
             if (!flowId.equals(updatedFlow.getId())) {
-                throw new IllegalArgumentException("Path flowId and payload flowId do not match");
+                return ResponseEntity.badRequest().body(Map.of(
+                        "error", "Path flowId and payload flowId do not match",
+                        "timestamp", LocalDateTime.now()
+                ));
             }
-            flowService.createFlow(updatedFlow); // Replace the existing flow with the updated one
+            flowService.createFlow(updatedFlow);  // effectively upsert in many DBs
+            Flow savedFlow = flowService.getFlow(flowId);
+
             Map<String, Object> response = new HashMap<>();
-            response.put("flowId", flowId);
+            response.put("flow", savedFlow);
             response.put("message", "Flow updated successfully");
             response.put("timestamp", LocalDateTime.now());
             return ResponseEntity.ok(response);
+
         } catch (Exception e) {
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(Map.of(
                     "error", e.getMessage(),
@@ -69,16 +82,59 @@ public class FlowController {
         }
     }
 
-    // Retrieve a flow by its ID
-    @GetMapping("/{flowId}")
-    public ResponseEntity<Map<String, Object>> getFlow(@PathVariable String flowId) {
+    // ================ 3) GET ALL - FULL  ================
+    // If you still want a route that returns the FULL flow objects:
+    @GetMapping
+    public ResponseEntity<?> getAllFlows(
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "10") int size
+    ) {
         try {
-            Flow flow = flowService.getFlow(flowId);
-            return ResponseEntity.ok(Map.of(
-                    "flowId", flow.getId(),
-                    "flowDetails", flow,
+            List<Flow> flows = flowService.listFlows(page, size);
+            Map<String, Object> response = new HashMap<>();
+            response.put("flows", flows);
+            response.put("timestamp", LocalDateTime.now());
+            return ResponseEntity.ok(response);
+
+        } catch (Exception e) {
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(Map.of(
+                    "error", e.getMessage(),
                     "timestamp", LocalDateTime.now()
             ));
+        }
+    }
+
+    // ================ 4) GET ALL - SUMMARY ONLY  ================
+    @GetMapping("/summary")
+    public ResponseEntity<?> getAllFlowSummaries(
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "10") int size
+    ) {
+        try {
+            List<FlowSummary> summaries = flowService.listFlowSummaries(page, size);
+            Map<String, Object> response = new HashMap<>();
+            response.put("flows", summaries);
+            response.put("timestamp", LocalDateTime.now());
+            return ResponseEntity.ok(response);
+
+        } catch (Exception e) {
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(Map.of(
+                    "error", e.getMessage(),
+                    "timestamp", LocalDateTime.now()
+            ));
+        }
+    }
+
+    // ================ 5) GET BY ID - FULL DETAILS  ================
+    @GetMapping("/{flowId}")
+    public ResponseEntity<?> getFlow(@PathVariable String flowId) {
+        try {
+            Flow flow = flowService.getFlow(flowId);
+            Map<String, Object> response = new HashMap<>();
+            response.put("flow", flow);
+            response.put("timestamp", LocalDateTime.now());
+            return ResponseEntity.ok(response);
+
         } catch (Exception e) {
             return ResponseEntity.status(HttpStatus.NOT_FOUND).body(Map.of(
                     "error", e.getMessage(),
@@ -87,16 +143,17 @@ public class FlowController {
         }
     }
 
-    // Delete a flow by its ID
+    // ================ 6) DELETE  ================
     @DeleteMapping("/{flowId}")
-    public ResponseEntity<Map<String, Object>> deleteFlow(@PathVariable String flowId) {
+    public ResponseEntity<?> deleteFlow(@PathVariable String flowId) {
         try {
             flowService.deleteFlowById(flowId);
-            return ResponseEntity.ok(Map.of(
-                    "flowId", flowId,
-                    "message", "Flow deleted successfully",
-                    "timestamp", LocalDateTime.now()
-            ));
+            Map<String, Object> response = new HashMap<>();
+            response.put("flowId", flowId);
+            response.put("message", "Flow deleted successfully");
+            response.put("timestamp", LocalDateTime.now());
+            return ResponseEntity.ok(response);
+
         } catch (Exception e) {
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(Map.of(
                     "error", e.getMessage(),
@@ -105,19 +162,26 @@ public class FlowController {
         }
     }
 
-    // Execute a flow by its ID
+    // ================ 7) EXECUTE (Optional) ================
+    // Example method for flow execution
     @PostMapping("/{flowId}/execute")
-    public ResponseEntity<Map<String, Object>> executeFlow(
+    public ResponseEntity<?> executeFlow(
             @PathVariable String flowId,
-            @RequestBody Map<String, Object> initialContext,
-            WebSocketSession session) {
+            @RequestBody Map<String, Object> initialContext
+    ) {
         try {
-            flowExecutor.executeFlow(flowId, initialContext, session);
-            return ResponseEntity.ok(Map.of(
-                    "flowId", flowId,
-                    "message", "Flow execution started successfully",
-                    "timestamp", LocalDateTime.now()
-            ));
+            WebSocketSession mockSession = null; // or your actual WebSocketSession
+            Flow flow = flowService.getFlow(flowId);
+
+            // If you have a FlowExecutor, call it:
+            flowExecutor.executeFlow(flow, initialContext, mockSession);
+
+            Map<String, Object> response = new HashMap<>();
+            response.put("flow", flow);
+            response.put("message", "Flow execution started successfully");
+            response.put("timestamp", LocalDateTime.now());
+            return ResponseEntity.ok(response);
+
         } catch (Exception e) {
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(Map.of(
                     "error", e.getMessage(),
@@ -126,18 +190,22 @@ public class FlowController {
         }
     }
 
-    // Retrieve logs for a flow execution
+    // ================ 8) LOGS (Optional) ================
     @GetMapping("/{flowId}/logs")
-    public ResponseEntity<Map<String, Object>> getExecutionLogs(
+    public ResponseEntity<?> getExecutionLogs(
             @PathVariable String flowId,
-            @RequestParam(required = false, defaultValue = "INFO") String logLevel) {
+            @RequestParam(required = false, defaultValue = "INFO") String logLevel
+    ) {
         try {
-            List<String> logs = logManagementService.getLogs(logLevel);
-            return ResponseEntity.ok(Map.of(
-                    "flowId", flowId,
-                    "logs", logs,
-                    "timestamp", LocalDateTime.now()
-            ));
+            // Example usage
+            List<String> logs = logService.getLogs(logLevel);
+
+            Map<String, Object> response = new HashMap<>();
+            response.put("flowId", flowId);
+            response.put("logs", logs);
+            response.put("timestamp", LocalDateTime.now());
+            return ResponseEntity.ok(response);
+
         } catch (Exception e) {
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(Map.of(
                     "error", e.getMessage(),

@@ -29,8 +29,17 @@ const InteractionNode = ({ data }) => {
           </div>
         )}
       </div>
-      <Handle type="target" position={Position.Top} />
-      <Handle type="source" position={Position.Bottom} />
+      {/* Ensure handles are correctly positioned for floating edges */}
+      <Handle
+        type="target"
+        position={Position.Top}
+        style={{ background: '#555' }}
+      />
+      <Handle
+        type="source"
+        position={Position.Bottom}
+        style={{ background: '#555' }}
+      />
     </div>
   );
 };

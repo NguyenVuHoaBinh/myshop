@@ -1,16 +1,24 @@
-import React, { useState } from 'react';
-import { Handle, Position } from '@xyflow/react';
+import React, { useState } from "react";
+import PropTypes from "prop-types";
+import { Handle, Position } from "@xyflow/react";
 
 const LogicNode = ({ data, onChange }) => {
-  const [condition, setCondition] = useState(data.condition || '');
+  const [condition, setCondition] = useState(data.condition || "");
+  const [error, setError] = useState("");
 
   const handleConditionChange = (e) => {
     const newCondition = e.target.value;
-    setCondition(newCondition);
 
-    // Call the onChange handler to update the node's data
-    if (onChange) {
-      onChange({ ...data, condition: newCondition });
+    try {
+      // Optional: Add validation or parsing for Boolean expressions
+      setCondition(newCondition);
+      setError(""); // Clear errors if condition is valid
+
+      if (onChange) {
+        onChange({ ...data, condition: newCondition });
+      }
+    } catch (err) {
+      setError("Invalid condition");
     }
   };
 
@@ -22,31 +30,40 @@ const LogicNode = ({ data, onChange }) => {
         <input
           type="text"
           value={condition}
-          placeholder="Enter a condition, e.g., x > 10"
+          placeholder="Enter condition (e.g., x > 10)"
           onChange={handleConditionChange}
+          style={{ borderColor: error ? "red" : "#ccc" }}
         />
+        {error && <p style={{ color: "red", fontSize: "0.8em" }}>{error}</p>}
         <p>Outputs:</p>
         <ul>
           <li><strong>True:</strong> Proceeds to the "True" path</li>
           <li><strong>False:</strong> Proceeds to the "False" path</li>
         </ul>
       </div>
-      {/* Handles */}
+      {/* Dynamic Handles */}
       <Handle
         id="true"
         type="source"
         position={Position.Right}
-        style={{ background: 'green' }}
+        style={{ background: "green" }}
       />
       <Handle
         id="false"
         type="source"
         position={Position.Left}
-        style={{ background: 'red' }}
+        style={{ background: "red" }}
       />
       <Handle type="target" position={Position.Top} />
     </div>
   );
+};
+
+LogicNode.propTypes = {
+  data: PropTypes.shape({
+    condition: PropTypes.string,
+  }),
+  onChange: PropTypes.func,
 };
 
 export default LogicNode;

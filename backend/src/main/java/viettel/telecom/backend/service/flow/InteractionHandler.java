@@ -4,97 +4,78 @@ import org.springframework.stereotype.Service;
 import org.springframework.web.socket.TextMessage;
 import org.springframework.web.socket.WebSocketSession;
 import viettel.telecom.backend.entity.flow.Flow;
-import viettel.telecom.backend.service.logging.LogManagementService;
 
 import java.io.IOException;
 import java.util.Map;
-import java.util.concurrent.*;
+import java.util.concurrent.CompletableFuture;
 
 @Service
 public class InteractionHandler {
 
-    private final ScheduledExecutorService scheduler = Executors.newScheduledThreadPool(1);
-    private final LogManagementService logManagementService;
-
-    public InteractionHandler(LogManagementService logManagementService) {
-        this.logManagementService = logManagementService;
-    }
-
-    public String handle(Flow.Step step, Map<String, Object> context, WebSocketSession session) {
-        int retryCount = 0;
-        int maxRetries = 3;
-
-        while (retryCount < maxRetries) {
+    /**
+     * Asynchronous handling of interaction nodes.
+     * Returns a CompletableFuture that waits for user input asynchronously.
+     */
+    public CompletableFuture<String> handleAsync(Flow.Node node, Map<String, Object> context, WebSocketSession session) {
+        return CompletableFuture.supplyAsync(() -> {
             try {
-                // Personalize the prompt using context
-                String personalizedPrompt = personalizePrompt(step.getPrompt(), context);
-                sendMessage(session, personalizedPrompt);
+                // Send bot response via WebSocket
+                sendMessage(session, node.getData().getBotResponse());
 
-                // Wait for the user's response
-                Future<String> userResponseFuture = scheduler.submit(() -> {
+                // Simulate waiting for user input
+                String userResponse;
+                synchronized (context) {
                     while (!context.containsKey("userResponse")) {
-                        Thread.sleep(500); // Poll for user response
+                        context.wait(500); // Wait for 500ms intervals until input is present
                     }
-                    return (String) context.get("userResponse");
-                });
-
-                String userResponse = userResponseFuture.get(step.getTimeout(), TimeUnit.SECONDS);
-
-                // Validate the user response
-                if (step.getValidationRules() != null && !userResponse.matches(step.getValidationRules())) {
-                    retryCount++;
-                    sendMessage(session, "Invalid input. Please try again.");
-                    logManagementService.writeLog("INFO", "Invalid input detected. Retry count: " + retryCount);
-                    continue; // Retry the current step
+                    userResponse = (String) context.get("userResponse");
                 }
 
-                // Store the user response in context and return the next step
+                // Validate user response
+                if (node.getData().getBotResponse() != null && !userResponse.matches(node.getData().getBotResponse())) {
+                    sendMessage(session, "Invalid input. Please try again.");
+                    return null; // Indicate invalid response
+                }
+
+                // Store valid response in context
                 context.put("userResponse", userResponse);
-                return step.getNextStepId();
+                return userResponse;
 
-            } catch (TimeoutException e) {
-                sendMessage(session, "Timeout occurred. Proceeding with fallback.");
-                logManagementService.writeLog("ERROR", "Timeout occurred for step: " + step.getId());
-                return step.getFallbackStepId();
-
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+                throw new RuntimeException("Interaction handling interrupted", e);
             } catch (Exception e) {
-                sendMessage(session, "Error: " + e.getMessage());
-                logManagementService.writeLog("ERROR", "Exception during interaction: " + e.getMessage());
-                return step.getFallbackStepId();
+                throw new RuntimeException("Error in handleAsync: " + e.getMessage(), e);
             }
-        }
-
-        // Exceeded max retries
-        sendMessage(session, "Maximum retry attempts reached. Proceeding with fallback.");
-        logManagementService.writeLog("ERROR", "Max retries reached for step: " + step.getId());
-        return step.getFallbackStepId();
+        });
     }
 
     /**
-     * Sends a message through the WebSocket session.
-     *
-     * @param session The WebSocket session.
-     * @param message The message to send.
+     * Synchronous handling of interaction nodes.
+     * Blocks until user input is received.
+     */
+    public String handle(Flow.Node node, Map<String, Object> context, WebSocketSession session) {
+        try {
+            // Block on the asynchronous method and return the result
+            return handleAsync(node, context, session).get();
+        } catch (Exception e) {
+            throw new RuntimeException("Error handling interaction node: " + e.getMessage(), e);
+        }
+    }
+
+    /**
+     * Utility method for sending messages via WebSocket.
      */
     private void sendMessage(WebSocketSession session, String message) {
+        if (session == null) {
+            System.out.println("WebSocketSession is null. Message: " + message);
+            return;
+        }
+
         try {
             session.sendMessage(new TextMessage(message));
         } catch (IOException e) {
-            logManagementService.writeLog("ERROR", "Failed to send WebSocket message: " + e.getMessage());
+            System.err.println("Failed to send WebSocket message: " + e.getMessage());
         }
-    }
-
-    /**
-     * Personalizes the prompt using context variables.
-     *
-     * @param prompt  The original prompt.
-     * @param context The context containing personalization data.
-     * @return The personalized prompt.
-     */
-    private String personalizePrompt(String prompt, Map<String, Object> context) {
-        for (Map.Entry<String, Object> entry : context.entrySet()) {
-            prompt = prompt.replace("{" + entry.getKey() + "}", entry.getValue().toString());
-        }
-        return prompt;
     }
 }

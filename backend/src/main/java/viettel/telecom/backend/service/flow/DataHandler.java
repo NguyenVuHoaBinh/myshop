@@ -8,16 +8,16 @@ import java.util.Map;
 @Service
 public class DataHandler {
 
-    public String handle(Flow.Step step, Map<String, Object> context) {
+    public String handle(Flow.Node node, Map<String, Object> context) {
         try {
-            Map<String, Object> dataConfig = (Map<String, Object>) step.getLlmConfig();
-            String key = (String) dataConfig.get("key");
-            String value = (String) dataConfig.get("value");
+            Map<String, Object> llmConfig = (Map<String, Object>) node.getData().getSelectedTemplate();
+            String key = (String) llmConfig.get("key");
+            String value = (String) llmConfig.get("value");
 
-            context.put(key, value); // Update context with the data
-            return step.getNextStepId();
+            context.put(key, value); // Update context with data
+            return node.getData().getTemplateId();
         } catch (Exception e) {
-            return step.getFallbackStepId(); // Move to fallback on failure
+            return node.getData().getLabel(); // Return fallback step ID on failure
         }
     }
 }

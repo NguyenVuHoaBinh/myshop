@@ -1,5 +1,6 @@
 package viettel.telecom.backend.entity.flow;
 
+import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import lombok.Data;
 import org.springframework.data.annotation.Id;
 import org.springframework.data.elasticsearch.annotations.Document;
@@ -24,20 +25,15 @@ public class Flow {
     private String name;
 
     @Field(type = FieldType.Text)
+    private String description;
+
+    @Field(type = FieldType.Text)
     @NotBlank(message = "Role cannot be blank")
     private String role;
 
     @Field(type = FieldType.Text)
     @NotBlank(message = "Purpose cannot be blank")
     private String purpose;
-
-    @Field(type = FieldType.Nested)
-    @NotEmpty(message = "Steps cannot be empty")
-    private List<Step> steps;
-
-    @Field(type = FieldType.Text)
-    @NotBlank(message = "CreatedBy cannot be blank")
-    private String createdBy;
 
     @Field(type = FieldType.Date)
     @NotBlank(message = "CreatedAt cannot be blank")
@@ -46,40 +42,131 @@ public class Flow {
     @Field(type = FieldType.Date)
     private String updatedAt;
 
+    @Field(type = FieldType.Nested)
+    @NotEmpty(message = "Nodes cannot be empty")
+    private List<Node> nodes;
+
+    @Field(type = FieldType.Nested)
+    private List<Edge> edges;
+
+    @Field(type = FieldType.Text)
+    @NotBlank(message = "CreatedBy cannot be blank")
+    private String createdBy;
+
     @Data
-    public static class Step {
+    public static class Node {
 
         @Field(type = FieldType.Keyword)
-        @NotBlank(message = "Step ID cannot be blank")
+        @NotBlank(message = "Node ID cannot be blank")
         private String id;
 
         @Field(type = FieldType.Keyword)
-        @NotBlank(message = "Template ID cannot be blank")
-        private String templateId;
-
-        @Field(type = FieldType.Keyword)
-        @NotBlank(message = "Action type cannot be blank")
-        private String actionType; // interaction, llm, logic, data
-
-        @Field(type = FieldType.Text)
-        private String condition; // Optional, only for logic steps
-
-        @Field(type = FieldType.Text)
-        private String prompt; // Optional, only for interaction steps
-
-        @Field(type = FieldType.Keyword)
-        private String nextStepId;
-
-        @Field(type = FieldType.Keyword)
-        private String fallbackStepId;
+        @NotBlank(message = "Node type cannot be blank")
+        private String type; // e.g., startNode, endNode, interactionNode, llmNode, logicNode
 
         @Field(type = FieldType.Object)
-        private Map<String, Object> llmConfig; // Optional, for LLM-specific configuration
+        private Position position;
 
-        @Field(type = FieldType.Integer)
-        private int timeout; // Timeout in seconds for interaction steps
+        @Field(type = FieldType.Object)
+        private NodeData data;
 
-        @Field(type = FieldType.Text)
-        private String validationRules; // Regex for input validation
+        @Data
+        public static class Position {
+
+            @Field(type = FieldType.Float)
+            private float x;
+
+            @Field(type = FieldType.Float)
+            private float y;
+        }
+
+        @Data
+        public static class NodeData {
+
+            @Field(type = FieldType.Text)
+            private String label;
+
+            @Field(type = FieldType.Text)
+            private String name;
+
+            @Field(type = FieldType.Text)
+            private String botResponse;
+
+            @Field(type = FieldType.Keyword)
+            private String templateId;
+
+            @Field(type = FieldType.Object)
+            private SelectedTemplate selectedTemplate;
+
+            @Data
+            public static class SelectedTemplate {
+
+                @Field(type = FieldType.Keyword)
+                private String id;
+
+                @Field(type = FieldType.Text)
+                private String name;
+
+                @Field(type = FieldType.Text)
+                private String description;
+
+                @Field(type = FieldType.Text)
+                private String type;
+
+                @Field(type = FieldType.Text)
+                private String object;
+
+                @Field(type = FieldType.Text)
+                private String objectField;
+
+                @Field(type = FieldType.Nested)
+                private List<FieldDetails> fields;
+
+                @Field(type = FieldType.Text)
+                private String systemPrompt;
+
+                @Field(type = FieldType.Keyword)
+                private String aiModel;
+
+                // Add these two fields to match your JSON payload
+                @Field(type = FieldType.Date)
+                private String createdAt;
+
+                @Field(type = FieldType.Date)
+                private String updatedAt;
+
+                @Data
+                public static class FieldDetails {
+                    @Field(type = FieldType.Text)
+                    private String fieldName;
+
+                    @Field(type = FieldType.Keyword)
+                    private String fieldType;
+                }
+            }
+
+
+
+        }
+    }
+
+    @Data
+    public static class Edge {
+
+        @Field(type = FieldType.Keyword)
+        @NotBlank(message = "Edge ID cannot be blank")
+        private String id;
+
+        @Field(type = FieldType.Keyword)
+        @NotBlank(message = "Source node ID cannot be blank")
+        private String source;
+
+        @Field(type = FieldType.Keyword)
+        @NotBlank(message = "Target node ID cannot be blank")
+        private String target;
+
+        @Field(type = FieldType.Keyword)
+        @NotBlank(message = "Edge type cannot be blank")
+        private String type; // e.g., animatedEdge
     }
 }

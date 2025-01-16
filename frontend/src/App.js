@@ -1,43 +1,42 @@
-import React, { Suspense, useEffect, useState } from 'react';
-import { HashRouter, Route, Routes, Navigate } from 'react-router-dom';
-import { useSelector } from 'react-redux';
-import { CSpinner, useColorModes } from '@coreui/react';
-import './scss/style.scss';
+import React, { Suspense, useEffect, useState } from 'react'
+import { HashRouter, Route, Routes, Navigate } from 'react-router-dom'
+import { useSelector } from 'react-redux'
+import { CSpinner, useColorModes } from '@coreui/react'
+import './scss/style.scss'
 
 // Lazy-loaded Components
-const DefaultLayout = React.lazy(() => import('./layout/DefaultLayout'));
-const Login = React.lazy(() => import('./views/pages/login/Login'));
-const Register = React.lazy(() => import('./views/pages/register/Register'));
-const Page404 = React.lazy(() => import('./views/pages/page404/Page404'));
-const Page500 = React.lazy(() => import('./views/pages/page500/Page500'));
-const PromptBuilder = React.lazy(() => import('./views/promptbuilder/PromptBuilder'));
-const TemplateEditor = React.lazy(() => import('./views/promptbuilder/TemplateEditor'));
-const AgentAction = React.lazy(() => import('./views/agentaction/AgentAction'));
-const AgentBuilderPage = React.lazy(() => import('./views/agentbuilderpage/AgentBuilderPage'));
-const CreateAgentPage = React.lazy(() => import('./views/createagentpage/CreateAgentPage'));
+const DefaultLayout = React.lazy(() => import('./layout/DefaultLayout'))
+const Login = React.lazy(() => import('./views/pages/login/Login'))
+const Register = React.lazy(() => import('./views/pages/register/Register'))
+const Page404 = React.lazy(() => import('./views/pages/page404/Page404'))
+const Page500 = React.lazy(() => import('./views/pages/page500/Page500'))
+const PromptBuilder = React.lazy(() => import('./views/promptbuilder/PromptBuilder'))
+const TemplateEditor = React.lazy(() => import('./views/promptbuilder/TemplateEditor'))
+const AgentAction = React.lazy(() => import('./views/agentaction/AgentAction'))
+const AgentBuilderPage = React.lazy(() => import('./views/agentbuilderpage/AgentBuilderPage'))
+const CreateAgentPage = React.lazy(() => import('./views/createagentpage/CreateAgentPage'))
 const NewPromptTemplateModal = React.lazy(() =>
   import('./views/newprompttemplatemodal/NewPromptTemplateModal')
-);
-const AgentBuilderModal = React.lazy(() => import('./views/agentbuildermodal/AgentBuilderModal'));
-const FlowManager = React.lazy(() => import('./views/flowbuilder/FlowManager'));
-const FlowEditor = React.lazy(() => import('./views/flowbuilder/FlowEditor'));
+)
+const AgentBuilderModal = React.lazy(() => import('./views/agentbuildermodal/AgentBuilderModal'))
+const FlowManager = React.lazy(() => import('./views/flowbuilder/FlowManager'))
+const FlowEditor = React.lazy(() => import('./views/flowbuilder/FlowEditor'))
 
 const App = () => {
-  const { isColorModeSet, setColorMode } = useColorModes('coreui-free-react-admin-template-theme');
-  const storedTheme = useSelector((state) => state.theme);
+  const { isColorModeSet, setColorMode } = useColorModes('coreui-free-react-admin-template-theme')
+  const storedTheme = useSelector((state) => state.theme)
 
-  const [isCreatingAgent, setIsCreatingAgent] = useState(false);
-  const [isCreateAgentBuilderModal, setIsCreateAgentBuilderModal] = useState(false);
+  const [isCreatingAgent, setIsCreatingAgent] = useState(false)
+  const [isCreateAgentBuilderModal, setIsCreateAgentBuilderModal] = useState(false)
 
   useEffect(() => {
     // Manage theme based on URL parameters or stored preferences
-    const urlParams = new URLSearchParams(window.location.href.split('?')[1]);
-    const theme = urlParams.get('theme')?.match(/^[A-Za-z0-9\s]+/)?.[0];
+    const urlParams = new URLSearchParams(window.location.href.split('?')[1])
+    const theme = urlParams.get('theme')?.match(/^[A-Za-z0-9\s]+/)?.[0]
 
-    if (theme) setColorMode(theme);
-
-    if (!isColorModeSet()) setColorMode(storedTheme);
-  }, [setColorMode, storedTheme, isColorModeSet]);
+    if (theme) setColorMode(theme)
+    if (!isColorModeSet()) setColorMode(storedTheme)
+  }, [setColorMode, storedTheme, isColorModeSet])
 
   return (
     <HashRouter>
@@ -57,16 +56,14 @@ const App = () => {
 
           {/* Flow Management Routes */}
           <Route exact path="/flowbuilder" name="Flow Manager" element={<FlowManager />} />
+          {/* 1) FlowEditor for creating a new flow */}
           <Route exact path="/floweditor" name="Flow Editor" element={<FlowEditor />} />
+          {/* 2) FlowEditor for editing an existing flow by ID */}
+          <Route exact path="/floweditor/:flowId" name="Flow Editor (Edit)" element={<FlowEditor />} />
 
           {/* Prompt and Template Management */}
           <Route exact path="/promptbuilder" name="Prompt Builder" element={<PromptBuilder />} />
-          <Route
-            exact
-            path="/template/:id"
-            name="Template Editor"
-            element={<TemplateEditor />}
-          />
+          <Route exact path="/template/:id" name="Template Editor" element={<TemplateEditor />} />
           <Route
             exact
             path="/newprompttemplatemodal"
@@ -118,12 +115,12 @@ const App = () => {
             }
           />
 
-          {/* Default Layout */}
+          {/* Default Layout (catch-all) */}
           <Route path="*" name="Home" element={<DefaultLayout />} />
         </Routes>
       </Suspense>
     </HashRouter>
-  );
-};
+  )
+}
 
-export default App;
+export default App
