@@ -1,97 +1,125 @@
 package viettel.telecom.backend.service.flow;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 import org.springframework.web.socket.TextMessage;
 import org.springframework.web.socket.WebSocketSession;
 import viettel.telecom.backend.entity.flow.Flow;
+import viettel.telecom.backend.entity.flow.Flow.Node;
 
 import java.io.IOException;
 import java.util.HashMap;
 import java.util.Map;
 
+/**
+ * A single-step flow executor that uses global edges (Approach B).
+ * We skip the startNode externally and call processNode(...) for each user turn.
+ */
 @Service
 public class FlowExecutor {
+
+    private static final Logger logger = LoggerFactory.getLogger(FlowExecutor.class);
 
     private final InteractionHandler interactionHandler;
     private final DataHandler dataHandler;
     private final LLMHandler llmHandler;
+    private final ObjectMapper objectMapper = new ObjectMapper();
 
-    public FlowExecutor(InteractionHandler interactionHandler, DataHandler dataHandler, LLMHandler llmHandler) {
+    public FlowExecutor(
+            InteractionHandler interactionHandler,
+            DataHandler dataHandler,
+            LLMHandler llmHandler
+    ) {
         this.interactionHandler = interactionHandler;
         this.dataHandler = dataHandler;
         this.llmHandler = llmHandler;
     }
 
-    public void executeFlow(Flow flow, Map<String, Object> initialContext, WebSocketSession session) {
-        Map<String, Object> context = new HashMap<>(initialContext);
-
+    /**
+     * Process a single node, performing its action and returning the ID
+     * of the next node (or null if the flow ends here).
+     *
+     * @param flow    The entire Flow, so we can look up edges
+     * @param node    The current Node to process
+     * @param context Execution context (including user response, etc.)
+     * @param session WebSocket session (may be null if not using websockets)
+     * @return Next node ID, or null if no next node or flow ended
+     */
+    public String processNode(Flow flow, Node node, Map<String, Object> context, WebSocketSession session) {
         try {
-            sendMessage(session, "Starting flow: " + flow.getName());
+            logger.debug("processNode() - ID: {}, Type: {}", node.getId(), node.getType());
 
-            Flow.Node currentNode = flow.getNodes().stream()
-                    .filter(node -> "startNode".equals(node.getType()))
-                    .findFirst()
-                    .orElseThrow(() -> new IllegalArgumentException("Start node not found"));
-
-            while (currentNode != null) {
-                sendMessage(session, "Processing node: " + currentNode.getId());
-                sendMessage(session, "Node type: " + currentNode.getType());
-
-                try {
-                    switch (currentNode.getType()) {
-                        case "startNode":
-                            sendMessage(session, "Start node encountered. Initializing flow...");
-                            break; // Continue to the next node
-                        case "interactionNode":
-                            sendMessage(session, currentNode.getData().getBotResponse());
-                            String userResponse = (String) context.get("userResponse");
-                            context.put("userResponse", userResponse);
-                            break;
-                        case "dataNode":
-                            dataHandler.handle(currentNode, context);
-                            break;
-                        case "llmNode":
-                            llmHandler.handle(currentNode, context, session);
-                            break;
-                        case "endNode":
-                            sendMessage(session, "Flow execution completed.");
-                            currentNode = null;
-                            continue; // Exit the loop
-                        default:
-                            sendMessage(session, "Unknown node type encountered: " + currentNode.getType());
-                            throw new IllegalArgumentException("Unknown node type: " + currentNode.getType());
+            // 1) Perform node-specific logic
+            switch (node.getType()) {
+                case "interactionNode":
+                    // Send a bot response (if we have a WebSocket session)
+                    String botResponse = node.getData().getBotResponse();
+                    if (botResponse != null && !botResponse.isEmpty()) {
+                        sendMessage(session, botResponse);
+                        logger.info("Sent bot response: {}", botResponse);
                     }
-                } catch (Exception nodeProcessingException) {
-                    sendMessage(session, "Error while processing node: " + currentNode.getId() + ". Details: " + nodeProcessingException.getMessage());
-                    throw nodeProcessingException;
-                }
 
-                // Transition to the next node
-                sendMessage(session, "Transitioning from node: " + currentNode.getId());
-                Flow.Node nextNode = getNextNode(flow, currentNode);
-                if (nextNode == null) {
-                    sendMessage(session, "Error: No valid next node found. Ending flow execution.");
+                    // Capture user response from context (if provided)
+                    String userResponse = (String) context.get("userResponse");
+                    if (userResponse != null) {
+                        logger.info("User response received: {}", userResponse);
+                        // store or handle as needed
+                        context.put("userResponse", userResponse);
+                    }
                     break;
-                }
 
-                sendMessage(session, "Next node found: " + nextNode.getId());
-                currentNode = nextNode;
+                case "dataNode":
+                    // Example: read/write data from context or external source
+                    dataHandler.handle(node, context);
+                    logger.info("Data node processed: {}", node.getId());
+                    break;
+
+                case "llmNode":
+                    // Example: call an LLM with some prompt
+                    llmHandler.handle(node, context, session);
+                    String llmResponse = (String) context.get("llmResponse");
+                    if (llmResponse != null && session != null && session.isOpen()) {
+                        sendMessage(session, llmResponse);
+                        logger.info("LLM response sent: {}", llmResponse);
+                    }
+                    break;
+
+                case "endNode":
+                    // End node => no next node
+                    logger.info("Reached end node: {}", node.getId());
+                    sendMessage(session, "Flow completed at end node: " + node.getId());
+                    return null;
+
+                default:
+                    logger.warn("Unknown node type encountered: {}", node.getType());
+                    sendMessage(session, "Unknown node type: " + node.getType());
+                    throw new IllegalArgumentException("Unknown node type: " + node.getType());
             }
+
+            // 2) Find the next node via global edges
+            Node nextNode = getNextNode(flow, node);
+            if (nextNode == null) {
+                // If there's no next node, we consider the flow ended
+                logger.info("No more edges from node: {} => flow ended.", node.getId());
+                sendMessage(session, "Flow ended. No further nodes.");
+                return null;
+            }
+            return nextNode.getId();
+
         } catch (Exception e) {
-            sendMessage(session, "Error during execution: " + e.getMessage());
+            logger.error("Error processing node: {}. Details: {}", node.getId(), e.getMessage(), e);
+            sendMessage(session, "Error processing node: " + node.getId());
+            throw new RuntimeException("Error processing node: " + e.getMessage(), e);
         }
     }
 
-
-
-    private Flow.Node getNodeById(Flow flow, String nodeId) {
-        return flow.getNodes().stream()
-                .filter(node -> node.getId().equals(nodeId))
-                .findFirst()
-                .orElse(null);
-    }
-
-    private Flow.Node getNextNode(Flow flow, Flow.Node currentNode) {
+    /**
+     * Locates the next node by searching for the first edge whose
+     * source == currentNode's ID, then retrieving that edge's target node.
+     */
+    private Node getNextNode(Flow flow, Node currentNode) {
         return flow.getEdges().stream()
                 .filter(edge -> edge.getSource().equals(currentNode.getId()))
                 .map(edge -> getNodeById(flow, edge.getTarget()))
@@ -99,53 +127,33 @@ public class FlowExecutor {
                 .orElse(null);
     }
 
+    /**
+     * Convenience method to find a node by ID within the flow's node list.
+     */
+    private Node getNodeById(Flow flow, String nodeId) {
+        return flow.getNodes().stream()
+                .filter(n -> n.getId().equals(nodeId))
+                .findFirst()
+                .orElse(null);
+    }
+
+    /**
+     * Send a message via WebSocket if session is available. Safe to call with null.
+     */
     private void sendMessage(WebSocketSession session, String message) {
-        if (session == null) {
-            System.out.println("WebSocketSession is null. Message: " + message);
+        if (session == null || !session.isOpen()) {
+            logger.debug("No open session available; cannot send message: {}", message);
             return;
         }
-
         try {
-            session.sendMessage(new TextMessage(message));
+            Map<String, String> response = new HashMap<>();
+            response.put("sender", "bot");
+            response.put("message", message);
+
+            String jsonResponse = objectMapper.writeValueAsString(response);
+            session.sendMessage(new TextMessage(jsonResponse));
         } catch (IOException e) {
-            System.err.println("Failed to send WebSocket message: " + e.getMessage());
+            logger.error("Failed to send WebSocket message. Details: {}", e.getMessage(), e);
         }
     }
-
-    public String processNode(Flow flow, Flow.Node node, Map<String, Object> context, WebSocketSession session) {
-        try {
-            switch (node.getType()) {
-                case "startNode":
-                    // Start the flow; typically doesn't require processing
-                    sendMessage(session, "Start node encountered. Initializing flow...");
-                    break; // Continue to the next node
-                case "interactionNode":
-                    sendMessage(session, node.getData().getBotResponse());
-                    String userResponse = (String) context.get("userResponse");
-                    context.put("userResponse", userResponse);
-                    break;
-                case "dataNode":
-                    dataHandler.handle(node, context);
-                    break;
-                case "llmNode":
-                    llmHandler.handle(node, context, session);
-                    break;
-                case "endNode":
-                    sendMessage(session, "Flow execution completed.");
-                    return null; // End of flow
-                default:
-                    sendMessage(session, "Unknown node type encountered: " + node.getType());
-                    throw new IllegalArgumentException("Unknown node type: " + node.getType());
-            }
-
-            // Get the next node
-            Flow.Node nextNode = getNextNode(flow, node);
-            return nextNode != null ? nextNode.getId() : null;
-        } catch (Exception e) {
-            throw new RuntimeException("Error processing node: " + e.getMessage(), e);
-        }
-    }
-
-
-
 }

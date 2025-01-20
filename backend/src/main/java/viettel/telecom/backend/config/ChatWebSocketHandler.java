@@ -15,24 +15,17 @@ import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 
 /**
- * A WebSocket handler that processes chat messages for a flow-based chatbot.
+ * WebSocket handler that manages chat flow interactions (Approach B).
+ * The start node is skipped, so we set currentNodeId to the next node
+ * and only process that node on the subsequent message.
  */
 @Component
 public class ChatWebSocketHandler extends TextWebSocketHandler {
 
     private final ObjectMapper objectMapper = new ObjectMapper();
 
-    /**
-     * Stores WebSocket sessions by sessionId (if needed).
-     * Key: sessionId, Value: WebSocketSession
-     */
+    // Tracks active sessions and their contexts
     private final Map<String, WebSocketSession> sessions = new ConcurrentHashMap<>();
-
-    /**
-     * Stores a context map for each session, so we know
-     * which node is "current" for that user's conversation.
-     * Key: sessionId, Value: a Map with flow data, e.g. { "currentNodeId": "123", ... }
-     */
     private final Map<String, Map<String, Object>> sessionContexts = new ConcurrentHashMap<>();
 
     private final FlowService flowService;
@@ -49,35 +42,32 @@ public class ChatWebSocketHandler extends TextWebSocketHandler {
         System.out.println("New WebSocket connection: " + session.getId());
     }
 
-    /**
-     * Called whenever a text message arrives from the client.
-     * The payload typically contains JSON with "flowId" and "userResponse".
-     */
     @Override
+    @SuppressWarnings("unchecked")
     protected void handleTextMessage(WebSocketSession session, TextMessage message) {
         try {
-            // Parse incoming JSON
+            // Convert incoming JSON to a Map
             String payload = message.getPayload();
-            @SuppressWarnings("unchecked")
             Map<String, Object> incomingData = objectMapper.readValue(payload, Map.class);
 
-            // Extract flowId, userResponse from the client message
+            // Extract the flowId and userResponse
             String flowId = (String) incomingData.getOrDefault("flowId", "");
             String userResponse = (String) incomingData.getOrDefault("userResponse", "");
+            System.out.println("Received message: " + userResponse + " for flowId: " + flowId);
 
-            // Retrieve or initialize the session context
+            // Session-specific context
             Map<String, Object> context = sessionContexts.computeIfAbsent(
                     session.getId(),
                     k -> new HashMap<>()
             );
 
+            // If no flowId is provided, just echo back
             if (flowId == null || flowId.isEmpty()) {
-                // If no flowId is provided, just echo
                 sendBotMessage(session, "No flowId provided. Echo: " + userResponse);
                 return;
             }
 
-            // 1. Fetch the flow from Elasticsearch (via FlowService)
+            // Load the Flow
             Flow flow;
             try {
                 flow = flowService.getFlow(flowId);
@@ -86,64 +76,99 @@ public class ChatWebSocketHandler extends TextWebSocketHandler {
                 return;
             }
 
-            // 2. Put user response into context so FlowExecutor can handle it
+            // Store user input in context
             context.put("userResponse", userResponse);
 
-            // 3. Determine the current node for this session
-            String currentNodeId = (String) context.getOrDefault("currentNodeId", null);
+            // Check if we already have a current node
+            String currentNodeId = (String) context.get("currentNodeId");
 
+            // ---------------------------------------------------------------------
+            // If currentNodeId == null, this is the first user message for this flow
+            // We skip the start node AND immediately process the next node
+            // so the user sees its response right away.
+            // ---------------------------------------------------------------------
             if (currentNodeId == null) {
-                // First time: "start" the flow
-                // Option A: Let flowExecutor.executeFlow() run the entire flow
-                // Option B: Initialize the current node to the flow's startNode, then do partial execution
-                // We'll do partial execution to handle "step-by-step" logic:
-
-                // Find the start node
+                // 1) Find the start node
                 Node startNode = flow.getNodes().stream()
                         .filter(n -> "startNode".equals(n.getType()))
                         .findFirst()
                         .orElseThrow(() -> new IllegalArgumentException("Start node not found in flow"));
 
-                // We'll store it
-                currentNodeId = startNode.getId();
-                context.put("currentNodeId", currentNodeId);
+                System.out.println("Skipping start node: " + startNode.getId());
+
+                // 2) Find the node after the start node
+                String nextNodeId = findFirstTargetNodeId(flow, startNode.getId());
+                if (nextNodeId == null) {
+                    sendBotMessage(session, "No next node found after start node. Flow halted.");
+                    return;
+                }
+
+                Node nextNode = flow.getNodes().stream()
+                        .filter(n -> n.getId().equals(nextNodeId))
+                        .findFirst()
+                        .orElseThrow(() -> new IllegalArgumentException("Next node not found: " + nextNodeId));
+
+                // 3) Immediately process that next node, so its output is shown right away
+                System.out.println("Auto-processing node after start: " + nextNodeId);
+                String followingNodeId = flowExecutor.processNode(flow, nextNode, context, session);
+
+                // 4) If that node leads to yet another node, store it in the context
+                if (followingNodeId != null) {
+                    context.put("currentNodeId", followingNodeId);
+                    System.out.println("Flow paused at node: " + followingNodeId);
+                } else {
+                    // Flow ended right after the first real node
+                    sendBotMessage(session, "Flow completed right after the first node.");
+                }
+
+                return;
             }
 
-            // 4. Process the current node
-            final String targetNodeId = currentNodeId; // Explicitly declare as final for clarity
+            // ---------------------------------------------------------------------
+            // Otherwise, we process the current node as usual
+            // ---------------------------------------------------------------------
             Node currentNode = flow.getNodes().stream()
-                    .filter(n -> n.getId().equals(targetNodeId))
+                    .filter(n -> n.getId().equals(currentNodeId))
                     .findFirst()
-                    .orElseThrow(() -> new IllegalArgumentException("Node not found: " + targetNodeId));
+                    .orElseThrow(() -> new IllegalArgumentException("Node not found: " + currentNodeId));
 
+            System.out.println("Processing current node: " + currentNodeId);
 
-            // This calls your existing logic in FlowExecutor
-            // which can handle interactionNode, dataNode, llmNode, etc.
             String nextNodeId = flowExecutor.processNode(flow, currentNode, context, session);
-
-            // 5. If there's a "nextNodeId", store it in the context;
-            //    otherwise, the flow is done
             if (nextNodeId != null) {
                 context.put("currentNodeId", nextNodeId);
+                System.out.println("Moved to next node: " + nextNodeId);
             } else {
-                // Flow ended, remove currentNodeId from context (or do whatever cleanup you need)
+                // Flow ended
+                sendBotMessage(session, "Flow completed.");
                 context.remove("currentNodeId");
             }
 
         } catch (Exception e) {
-            // On any error, notify the user/bot
+            e.printStackTrace();
             try {
-                String errorMsg = "Error handling message: " + e.getMessage();
-                sendBotMessage(session, errorMsg);
+                sendBotMessage(session, "Error handling message: " + e.getMessage());
             } catch (IOException ioException) {
                 ioException.printStackTrace();
             }
         }
     }
 
+
     /**
-     * Called when the user closes the WebSocket or it is otherwise disconnected.
+     * Helper: find the first edge whose source == startNodeId, return target node ID
      */
+    private String findFirstTargetNodeId(Flow flow, String startNodeId) {
+        if (flow.getEdges() == null || flow.getEdges().isEmpty()) {
+            return null;
+        }
+        return flow.getEdges().stream()
+                .filter(e -> e.getSource().equals(startNodeId))
+                .map(Flow.Edge::getTarget)
+                .findFirst()
+                .orElse(null);
+    }
+
     @Override
     public void afterConnectionClosed(WebSocketSession session, CloseStatus status) {
         sessions.remove(session.getId());
@@ -152,7 +177,7 @@ public class ChatWebSocketHandler extends TextWebSocketHandler {
     }
 
     /**
-     * Utility method to send a "bot" message (simple JSON) to the client.
+     * Simple utility to send a message to the client (sender=bot).
      */
     private void sendBotMessage(WebSocketSession session, String text) throws IOException {
         Map<String, String> response = Map.of(
@@ -161,5 +186,4 @@ public class ChatWebSocketHandler extends TextWebSocketHandler {
         );
         session.sendMessage(new TextMessage(objectMapper.writeValueAsString(response)));
     }
-
 }

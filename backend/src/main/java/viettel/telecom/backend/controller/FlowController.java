@@ -21,8 +21,14 @@ import java.util.Map;
 public class FlowController {
 
     private final FlowService flowService;
-    private final FlowExecutor flowExecutor;        // example usage
-    private final LogManagementService logService;  // example usage
+    private final FlowExecutor flowExecutor;
+    private final LogManagementService logService;
+
+    /**
+     * Simple in-memory map to store context per flowId (demo only).
+     * In a real system, you'd likely track context per user or session, not per flowId.
+     */
+    private final Map<String, Map<String, Object>> flowContexts = new HashMap<>();
 
     @Autowired
     public FlowController(FlowService flowService,
@@ -38,7 +44,6 @@ public class FlowController {
     public ResponseEntity<?> createFlow(@RequestBody Flow flow) {
         try {
             String newFlowId = flowService.createFlow(flow);
-            // Fetch the created flow to return it in the response
             Flow createdFlow = flowService.getFlow(newFlowId);
 
             Map<String, Object> response = new HashMap<>();
@@ -65,7 +70,7 @@ public class FlowController {
                         "timestamp", LocalDateTime.now()
                 ));
             }
-            flowService.createFlow(updatedFlow);  // effectively upsert in many DBs
+            flowService.createFlow(updatedFlow);  // upsert approach
             Flow savedFlow = flowService.getFlow(flowId);
 
             Map<String, Object> response = new HashMap<>();
@@ -83,7 +88,6 @@ public class FlowController {
     }
 
     // ================ 3) GET ALL - FULL  ================
-    // If you still want a route that returns the FULL flow objects:
     @GetMapping
     public ResponseEntity<?> getAllFlows(
             @RequestParam(defaultValue = "0") int page,
@@ -162,25 +166,101 @@ public class FlowController {
         }
     }
 
-    // ================ 7) EXECUTE (Optional) ================
-    // Example method for flow execution
+    // ================ 7) EXECUTE - auto-run next node after start node ================
     @PostMapping("/{flowId}/execute")
     public ResponseEntity<?> executeFlow(
             @PathVariable String flowId,
-            @RequestBody Map<String, Object> initialContext
+            @RequestBody(required = false) Map<String, Object> requestBody
     ) {
         try {
-            WebSocketSession mockSession = null; // or your actual WebSocketSession
+            // 1) Fetch the flow
             Flow flow = flowService.getFlow(flowId);
+            if (flow == null) {
+                return ResponseEntity.badRequest().body(Map.of("error", "Flow not found"));
+            }
 
-            // If you have a FlowExecutor, call it:
-            flowExecutor.executeFlow(flow, initialContext, mockSession);
+            // 2) Retrieve or create flow-specific context
+            Map<String, Object> context = flowContexts.computeIfAbsent(flowId, k -> new HashMap<>());
 
-            Map<String, Object> response = new HashMap<>();
-            response.put("flow", flow);
-            response.put("message", "Flow execution started successfully");
-            response.put("timestamp", LocalDateTime.now());
-            return ResponseEntity.ok(response);
+            // 3) If the user provided something (e.g. "userResponse"), store it
+            if (requestBody != null && requestBody.get("userResponse") != null) {
+                context.put("userResponse", requestBody.get("userResponse"));
+            }
+
+            // 4) Check if we already have a currentNodeId
+            String currentNodeId = (String) context.get("currentNodeId");
+            if (currentNodeId == null) {
+                // ------------------------------------------------------------
+                // Skip the start node, BUT auto-execute the next node
+                // ------------------------------------------------------------
+                Flow.Node startNode = flow.getNodes().stream()
+                        .filter(n -> "startNode".equals(n.getType()))
+                        .findFirst()
+                        .orElseThrow(() -> new IllegalArgumentException("Start node not found"));
+
+                // find the node after the start node
+                String nextNodeId = flow.getEdges().stream()
+                        .filter(e -> e.getSource().equals(startNode.getId()))
+                        .map(Flow.Edge::getTarget)
+                        .findFirst()
+                        .orElse(null);
+
+                if (nextNodeId == null) {
+                    return ResponseEntity.ok(Map.of("message", "No node after start node. Flow halted."));
+                }
+
+                // Immediately process that next node
+                Flow.Node nodeAfterStart = flow.getNodes().stream()
+                        .filter(n -> n.getId().equals(nextNodeId))
+                        .findFirst()
+                        .orElseThrow(() -> new IllegalArgumentException("Node after start not found"));
+
+                // Single-step process the node after start
+                String followingNodeId = flowExecutor.processNode(flow, nodeAfterStart, context, null);
+
+                // If the node after start leads to another node, store it in context
+                if (followingNodeId == null) {
+                    // Flow ended right after the first node
+                    return ResponseEntity.ok(Map.of(
+                            "message", "Flow completed immediately after the first node",
+                            "processedNodeId", nextNodeId
+                    ));
+                } else {
+                    // We have a next node after the node-after-start
+                    context.put("currentNodeId", followingNodeId);
+                    return ResponseEntity.ok(Map.of(
+                            "message", "Auto-executed node after start. Flow paused at node: " + followingNodeId,
+                            "processedNodeId", nextNodeId,
+                            "currentNodeId", followingNodeId
+                    ));
+                }
+            }
+
+            // ---------------------------------------------------------------
+            // 5) If we already have a currentNodeId, process that node (1 step)
+            // ---------------------------------------------------------------
+            Flow.Node currentNode = flow.getNodes().stream()
+                    .filter(n -> n.getId().equals(currentNodeId))
+                    .findFirst()
+                    .orElseThrow(() -> new IllegalArgumentException("Node not found: " + currentNodeId));
+
+            // pass null for WebSocketSession
+            String nextNodeId = flowExecutor.processNode(flow, currentNode, context, null);
+
+            if (nextNodeId == null) {
+                // Flow ended
+                context.remove("currentNodeId");
+                return ResponseEntity.ok(Map.of(
+                        "message", "Flow completed at node: " + currentNodeId
+                ));
+            } else {
+                context.put("currentNodeId", nextNodeId);
+                return ResponseEntity.ok(Map.of(
+                        "message", "Node processed successfully. Moved to node " + nextNodeId,
+                        "previousNodeId", currentNodeId,
+                        "currentNodeId", nextNodeId
+                ));
+            }
 
         } catch (Exception e) {
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(Map.of(
@@ -189,6 +269,7 @@ public class FlowController {
             ));
         }
     }
+
 
     // ================ 8) LOGS (Optional) ================
     @GetMapping("/{flowId}/logs")

@@ -1,4 +1,4 @@
-import { v4 as uuidv4 } from 'uuid';
+import { v4 as uuidv4 } from "uuid";
 
 // Utility to add a new node
 export const addNode = (nodes, type, position = { x: 250, y: 150 }) => {
@@ -24,7 +24,7 @@ export const removeEdgesForNode = (edges, nodeId) =>
   edges.filter((edge) => edge.source !== nodeId && edge.target !== nodeId);
 
 // Utility to clean up orphan edges
-export const cleanEdges = (edges, nodeIds) =>
-  edges.filter((edge) =>
-    nodeIds.includes(edge.source) && nodeIds.includes(edge.target)
+export const removeOrphanEdges = (edges, nodeIds) =>
+  edges.filter(
+    (edge) => nodeIds.includes(edge.source) && nodeIds.includes(edge.target)
   );

@@ -4,37 +4,22 @@ import {
   CCard,
   CCardBody,
   CCardHeader,
-  CModal,
-  CModalHeader,
-  CModalBody,
-  CModalFooter,
   CToast,
   CToastBody,
   CToaster,
 } from "@coreui/react";
-import { useNavigate } from "react-router-dom"; // For navigation
+import { useNavigate } from "react-router-dom";
 import { useTable } from "react-table";
 import axios from "axios";
 
-/**
- * FlowManager:
- * 1) Fetch minimal flow summaries from "/api/v1/flows/summary"
- * 2) Display them in a table (only ID, Name, Description, or whichever minimal fields).
- * 3) On Edit, fetch the full flow from "/api/v1/flows/{flowId}" before showing the modal.
- * 4) On Save, either create or update the flow, then re-fetch the summaries.
- */
 const FlowManager = () => {
-  const [flowSummaries, setFlowSummaries] = useState([]);  // minimal data: id, name, description
+  const [flowSummaries, setFlowSummaries] = useState([]); // minimal data: id, name, description
   const [loading, setLoading] = useState(true);
-  const [modalVisible, setModalVisible] = useState(false);
-  const [currentFlow, setCurrentFlow] = useState(null);    // full flow when editing
   const [toast, setToast] = useState(null);
-
-  // Adjust these to match your real endpoints
   const API_BASE_URL = "http://localhost:8888/api/v1/flows";
-  const navigate = useNavigate(); // Initialize navigation
+  const navigate = useNavigate();
 
-  // Table columns: display only minimal info (e.g., name, description)
+  // Table columns: display minimal info (e.g., name, description)
   const columns = React.useMemo(
     () => [
       { Header: "Name", accessor: "name" },
@@ -76,22 +61,16 @@ const FlowManager = () => {
   const { getTableProps, getTableBodyProps, headerGroups, rows, prepareRow } =
     useTable({ columns, data: flowSummaries });
 
-  // Fetch the minimal flow summaries on mount
-  useEffect(() => {
-    fetchFlowSummaries();
-  }, []);
-
   /**
-   * Fetch minimal flows (summaries) from /api/v1/flows/summary
+   * Fetch flow summaries from /api/v1/flows/summary
    */
   const fetchFlowSummaries = async () => {
     setLoading(true);
     try {
       const response = await axios.get(`${API_BASE_URL}/summary`);
-      // Expecting something like:  { flows: [ {id, name, description}, ... ], timestamp: "..." }
       const fetched = response.data?.flows || [];
-
       setFlowSummaries(fetched);
+
       if (fetched.length === 0) {
         showToast("No flows available. Please create a new flow.", "warning");
       }
@@ -103,53 +82,65 @@ const FlowManager = () => {
     }
   };
 
+  useEffect(() => {
+    fetchFlowSummaries();
+  }, []);
+
   /**
-   * Handle user clicking "Edit": fetch the full flow from /api/v1/flows/{flowId},
-   * then open the modal.
+   * Create a new flow and navigate to its editor
+   */
+  const handleCreateNewFlow = async () => {
+    try {
+      const defaultFlow = {
+        name: "Untitled Flow",
+        description: "",
+        role: "default-role",
+        purpose: "",
+      };
+
+      // Make POST request to create a new flow
+      const response = await axios.post(API_BASE_URL, defaultFlow);
+      const newFlowId = response.data?.flow?.id;
+
+      if (newFlowId) {
+        showToast("Flow created successfully!", "success");
+        navigate(`/floweditor/${newFlowId}`); // Redirect to the FlowEditor
+      } else {
+        throw new Error("Failed to retrieve the ID of the created flow");
+      }
+    } catch (error) {
+      console.error("Error creating new flow:", error);
+      showToast("Error creating new flow. Please try again.", "danger");
+    }
+  };
+
+  /**
+   * Handle 'Edit' Flow: Fetch full flow details and navigate to editor
    */
   const handleEditClick = async (flowId) => {
     try {
       const response = await axios.get(`${API_BASE_URL}/${flowId}`);
-      // The response structure might be { flow: {id, name, description, role, purpose, ...}, timestamp: "..." }
       const fullFlow = response.data?.flow;
-      setCurrentFlow(fullFlow);
-      setModalVisible(true);
+
+      if (fullFlow) {
+        navigate(`/floweditor/${flowId}`);
+      } else {
+        throw new Error("Flow not found");
+      }
     } catch (error) {
-      console.error("Error fetching full flow:", error);
+      console.error("Error fetching full flow details:", error);
       showToast("Error fetching flow details. Please try again.", "danger");
     }
   };
 
   /**
-   * Create or update the flow
-   */
-  const handleCreateOrUpdate = async () => {
-    try {
-      // If currentFlow.id exists, we do PUT, otherwise POST
-      if (currentFlow?.id) {
-        await axios.put(`${API_BASE_URL}/${currentFlow.id}`, currentFlow);
-        showToast("Flow updated successfully", "success");
-      } else {
-        await axios.post(API_BASE_URL, currentFlow);
-        showToast("Flow created successfully", "success");
-      }
-      // Refresh the summary list and close modal
-      fetchFlowSummaries();
-      setModalVisible(false);
-    } catch (error) {
-      console.error("Error saving flow:", error);
-      showToast("Error saving flow. Please try again.", "danger");
-    }
-  };
-
-  /**
-   * Delete a flow by ID
+   * Handle 'Delete' Flow: Deletes by ID
    */
   const handleDelete = async (flowId) => {
     if (window.confirm("Are you sure you want to delete this flow?")) {
       try {
         await axios.delete(`${API_BASE_URL}/${flowId}`);
-        showToast("Flow deleted successfully", "success");
+        showToast("Flow deleted successfully!", "success");
         fetchFlowSummaries();
       } catch (error) {
         console.error("Error deleting flow:", error);
@@ -159,7 +150,7 @@ const FlowManager = () => {
   };
 
   /**
-   * Show a toast for messages
+   * Show a toast notification
    */
   const showToast = (message, color) => {
     setToast(
@@ -170,18 +161,14 @@ const FlowManager = () => {
     setTimeout(() => setToast(null), 3000);
   };
 
+  /**
+   * Render the FlowManager component
+   */
   return (
     <CCard>
       <CCardHeader>
         <h5>Flow Manager</h5>
-        <CButton
-          color="primary"
-          onClick={() => {
-            // Clear currentFlow to create a brand new one
-            setCurrentFlow({ name: "", description: "", role: "", purpose: "" });
-            setModalVisible(true);
-          }}
-        >
+        <CButton color="primary" onClick={handleCreateNewFlow}>
           Create New Flow
         </CButton>
       </CCardHeader>
@@ -192,14 +179,11 @@ const FlowManager = () => {
           <table {...getTableProps()} className="table table-bordered">
             <thead>
               {headerGroups.map((headerGroup, headerIndex) => (
-                <tr
-                  {...headerGroup.getHeaderGroupProps()}
-                  key={headerGroup.id || headerIndex}
-                >
+                <tr {...headerGroup.getHeaderGroupProps()} key={headerIndex}>
                   {headerGroup.headers.map((column, columnIndex) => {
                     const { key, ...rest } = column.getHeaderProps();
                     return (
-                      <th {...rest} key={key || columnIndex}>
+                      <th key={key || columnIndex} {...rest}>
                         {column.render("Header")}
                       </th>
                     );
@@ -211,18 +195,15 @@ const FlowManager = () => {
               {rows.map((row, rowIndex) => {
                 prepareRow(row);
                 return (
-                  <tr
-                    {...row.getRowProps()}
-                    key={row.id || row.original.id || rowIndex}
-                  >
-                    {row.cells.map((cell, cellIndex) => (
-                      <td
-                        {...cell.getCellProps()}
-                        key={cell.column.id || cellIndex}
-                      >
-                        {cell.render("Cell")}
-                      </td>
-                    ))}
+                  <tr {...row.getRowProps()} key={rowIndex}>
+                    {row.cells.map((cell, cellIndex) => {
+                      const { key, ...rest } = cell.getCellProps();
+                      return (
+                        <td key={key || cellIndex} {...rest}>
+                          {cell.render("Cell")}
+                        </td>
+                      );
+                    })}
                   </tr>
                 );
               })}
@@ -230,75 +211,6 @@ const FlowManager = () => {
           </table>
         )}
       </CCardBody>
-
-      {/* Modal for Create/Edit (full flow details) */}
-      <CModal show={modalVisible} onClose={() => setModalVisible(false)}>
-        <CModalHeader>
-          {currentFlow?.id ? "Edit Flow" : "Create Flow"}
-        </CModalHeader>
-        <CModalBody>
-          <form>
-            <div className="mb-3">
-              <label className="form-label">Name</label>
-              <input
-                type="text"
-                className="form-control"
-                value={currentFlow?.name || ""}
-                onChange={(e) =>
-                  setCurrentFlow({ ...currentFlow, name: e.target.value })
-                }
-              />
-            </div>
-
-            {/* If you want to show "Description" in the form, include it here */}
-            <div className="mb-3">
-              <label className="form-label">Description</label>
-              <input
-                type="text"
-                className="form-control"
-                value={currentFlow?.description || ""}
-                onChange={(e) =>
-                  setCurrentFlow({ ...currentFlow, description: e.target.value })
-                }
-              />
-            </div>
-
-            {/* Role field */}
-            <div className="mb-3">
-              <label className="form-label">Role</label>
-              <input
-                type="text"
-                className="form-control"
-                value={currentFlow?.role || ""}
-                onChange={(e) =>
-                  setCurrentFlow({ ...currentFlow, role: e.target.value })
-                }
-              />
-            </div>
-
-            {/* Purpose field */}
-            <div className="mb-3">
-              <label className="form-label">Purpose</label>
-              <textarea
-                className="form-control"
-                value={currentFlow?.purpose || ""}
-                onChange={(e) =>
-                  setCurrentFlow({ ...currentFlow, purpose: e.target.value })
-                }
-              />
-            </div>
-          </form>
-        </CModalBody>
-        <CModalFooter>
-          <CButton color="primary" onClick={handleCreateOrUpdate}>
-            Save
-          </CButton>
-          <CButton color="secondary" onClick={() => setModalVisible(false)}>
-            Cancel
-          </CButton>
-        </CModalFooter>
-      </CModal>
-
       {/* Toast Notifications */}
       <CToaster>{toast}</CToaster>
     </CCard>
