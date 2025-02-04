@@ -20,12 +20,20 @@ import {
   updateNodeData,
   removeEdgesForNode,
   removeOrphanEdges,
-} from "./FlowUtils"; // Import utility functions for managing nodes and edges
+} from "./FlowUtils"; // Utility functions for managing nodes and edges
 import ChatPanel from "../chatpanel/ChatPanel";
 import "./FlowEditor.css";
 
 const edgeTypes = {
   animatedEdge: CustomAnimatedEdge,
+};
+
+// Define default LLM configuration
+const defaultLLMConfig = {
+  aiModel: "gpt-4o",
+  temperature: 0.7,
+  max_tokens: 100,
+  stream: false,
 };
 
 const FlowEditor = () => {
@@ -65,36 +73,41 @@ const FlowEditor = () => {
     try {
       const response = await axiosInstance.get(`/api/v1/flows/${flowId}`);
       const { flow } = response.data;
-
       if (!flow) {
         alert("No flow data returned from server.");
         return;
       }
-
       const { name, description, nodes: fetchedNodes, edges: fetchedEdges } = flow;
 
       // Set metadata
       setFlowName(name || "");
       setDescription(description || "");
 
-      // Process nodes
-      const updatedNodes = (fetchedNodes || []).map((node) => ({
-        ...node,
-        data: {
-          ...node.data,
-          onChange: (updatedNodeData) => {
-            setNodes((nds) =>
-              nds.map((n) =>
-                n.id === updatedNodeData.id
-                  ? { ...n, data: { ...updatedNodeData.data } }
-                  : n
-              )
-            );
+      // Process nodes: ensure each llmNode has a default llmconfig if missing.
+      const updatedNodes = (fetchedNodes || []).map((node) => {
+        let newData = { ...node.data };
+        if (node.type === "llmNode" && !newData.llmconfig) {
+          newData.llmconfig = { ...defaultLLMConfig };
+        }
+        return {
+          ...node,
+          data: {
+            ...newData,
+            // Attach an onChange handler to allow inline editing
+            onChange: (updatedNodeData) => {
+              setNodes((nds) =>
+                nds.map((n) =>
+                  n.id === updatedNodeData.id
+                    ? { ...n, data: { ...updatedNodeData.data } }
+                    : n
+                )
+              );
+            },
           },
-        },
-      }));
+        };
+      });
 
-      // Process edges
+      // Process edges: assign type and marker properties.
       const updatedEdges = (fetchedEdges || []).map((edge) => ({
         ...edge,
         id: edge.id || `edge-${Date.now()}`,
@@ -112,7 +125,7 @@ const FlowEditor = () => {
 
   useEffect(() => {
     fetchFlow();
- }, [flowId, fetchFlow]);
+  }, [flowId, fetchFlow]);
 
   // ---------------------------
   // Remove Orphaned Edges
@@ -144,12 +157,19 @@ const FlowEditor = () => {
       id: flowId || "",
       name: flowName,
       description,
-      nodes: nodes.map((node) => ({
-        id: node.id,
-        type: node.type,
-        position: node.position,
-        data: node.data,
-      })),
+      nodes: nodes.map((node) => {
+        // If node is an LLM node and lacks llmconfig, add the default.
+        let nodeData = { ...node.data };
+        if (node.type === "llmNode" && !nodeData.llmconfig) {
+          nodeData = { ...nodeData, llmconfig: { ...defaultLLMConfig } };
+        }
+        return {
+          id: node.id,
+          type: node.type,
+          position: node.position,
+          data: nodeData,
+        };
+      }),
       edges: edges.map((edge) => ({
         id: edge.id,
         source: edge.source,
@@ -234,7 +254,7 @@ const FlowEditor = () => {
             onDeleteNode={() => {
               if (selectedNode) {
                 setNodes((nds) => nds.filter((node) => node.id !== selectedNode.id));
-                setEdges((eds) => removeEdgesForNode(eds, selectedNode.id)); // Remove edges here
+                setEdges((eds) => removeEdgesForNode(eds, selectedNode.id)); // Remove edges for the deleted node
               }
             }}
             isDeleteDisabled={!selectedNode}

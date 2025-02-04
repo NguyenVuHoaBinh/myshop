@@ -23,7 +23,12 @@ const NewPromptTemplateModal = ({ show, onClose }) => {
     description: "",
     object: "",
     objectField: "",
-    aiModel: "OpenAI", // Default AI Model
+    llmconfig: {  // Default llmconfig values
+      aiModel: "gpt-4o",
+      temperature: 0.7,
+      max_tokens: 100,
+      stream: false,
+    },
   });
 
   const [templateTypes, setTemplateTypes] = useState([]);
@@ -61,7 +66,7 @@ const NewPromptTemplateModal = ({ show, onClose }) => {
     setFields(selectedObject?.fields || []);
   }, [formData.object, objects]);
 
-  // Handle form changes
+  // Handle form changes for top-level fields
   const handleChange = (e) => {
     setFormData({
       ...formData,
@@ -69,12 +74,16 @@ const NewPromptTemplateModal = ({ show, onClose }) => {
     });
   };
 
+  // (Optional) You can add a separate handler if you want to update llmconfig fields individually.
+  // For this example, we assume llmconfig remains at its default until further customization.
+
   // Handle Next button click
   const handleNext = async () => {
     try {
       setLoading(true);
 
-      // Transform formData for the API payload
+      // Transform formData for the API payload.
+      // Notice that we now include the nested llmconfig object.
       const payload = {
         type: formData.templateType,
         name: formData.name,
@@ -82,7 +91,7 @@ const NewPromptTemplateModal = ({ show, onClose }) => {
         description: formData.description,
         object: formData.object,
         objectField: formData.objectField,
-        aiModel: formData.aiModel,
+        llmconfig: formData.llmconfig, // Include the nested LLM configuration
       };
 
       // Send POST request to create the new template

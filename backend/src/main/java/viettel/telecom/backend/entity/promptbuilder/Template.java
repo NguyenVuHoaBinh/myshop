@@ -35,7 +35,6 @@ public class Template {
     @NotBlank(message = "Object field cannot be blank")
     private String objectField;
 
-
     @Field(type = FieldType.Text)
     @NotBlank(message = "Description cannot be blank")
     private String description;
@@ -58,9 +57,10 @@ public class Template {
     @Field(type = FieldType.Date)
     private LocalDate updatedAt;
 
-    @Field(type = FieldType.Keyword)
-    @NotBlank(message = "AI Model cannot be blank")
-    private String aiModel;
+    // Grouping LLM configuration settings into a single object field.
+    @Field(type = FieldType.Object)
+    @NotNull(message = "LLM configuration cannot be null")
+    private LLMConfig llmconfig;
 
     @Data
     public static class FieldMapping {
@@ -71,5 +71,21 @@ public class Template {
         @Field(type = FieldType.Keyword)
         @NotBlank(message = "Field type cannot be blank")
         private String fieldType;
+    }
+
+    @Data
+    public static class LLMConfig {
+        @Field(type = FieldType.Keyword)
+        @NotBlank(message = "AI Model cannot be blank")
+        private String aiModel;
+
+        @Field(type = FieldType.Float)
+        private Double temperature;
+
+        @Field(type = FieldType.Integer)
+        private Integer max_tokens;
+
+        @Field(type = FieldType.Boolean)
+        private Boolean stream;
     }
 }

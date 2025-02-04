@@ -1,6 +1,14 @@
 import React, { useState, useEffect } from 'react';
 import Draggable from 'react-draggable';
 
+// Assume defaultLLMConfig is imported or defined in this file.
+const defaultLLMConfig = {
+  aiModel: "gpt-4o",
+  temperature: 0.7,
+  max_tokens: 100,
+  stream: false,
+};
+
 const Sidebar = ({
   selectedNode,
   onUpdateNodeData,
@@ -17,94 +25,76 @@ const Sidebar = ({
   const [inputType, setInputType] = useState('text');
   const [options, setOptions] = useState([]);
   const [selectedTemplateId, setSelectedTemplateId] = useState('');
+  const [showConversation, setShowConversation] = useState(false);
 
   // Synchronize the node's data with the state
   useEffect(() => {
     if (selectedNode) {
-      const { name, label, botResponse, inputType, options, templateId } =
-        selectedNode.data || {};
+      const {
+        name,
+        label,
+        botResponse,
+        inputType,
+        options,
+        templateId,
+        showConversation,
+      } = selectedNode.data || {};
       setName(name || '');
       setLabel(label || '');
       setBotResponse(botResponse || '');
       setInputType(inputType || 'text');
       setOptions(options || []);
       setSelectedTemplateId(templateId || '');
+      setShowConversation(showConversation || false);
     }
   }, [selectedNode]);
 
-  // Handlers for node-specific fields
-  const handleNameChange = (value) => {
-    setName(value);
-    onUpdateNodeData({
-      ...selectedNode,
-      data: { ...selectedNode.data, name: value },
-    });
-  };
-
-  const handleLabelChange = (value) => {
-    setLabel(value);
-    onUpdateNodeData({
-      ...selectedNode,
-      data: { ...selectedNode.data, label: value },
-    });
-  };
-
-  const handleBotResponseChange = (value) => {
-    setBotResponse(value);
-    onUpdateNodeData({
-      ...selectedNode,
-      data: { ...selectedNode.data, botResponse: value },
-    });
-  };
-
-  const handleInputTypeChange = (type) => {
-    setInputType(type);
+  // Handler to update node data while preserving existing fields.
+  const updateNodeField = (updatedData) => {
     onUpdateNodeData({
       ...selectedNode,
       data: {
         ...selectedNode.data,
-        inputType: type,
-        options: type === 'text' ? [] : options,
+        ...updatedData,
       },
     });
   };
 
-  const handleOptionsChange = (index, value) => {
-    const newOptions = [...options];
-    newOptions[index] = value;
-    setOptions(newOptions);
-    onUpdateNodeData({
-      ...selectedNode,
-      data: { ...selectedNode.data, options: newOptions },
-    });
-  };
-
+  // Handle template selection: update node data with selected template
+  // and copy its LLM configuration (if available); otherwise, use the default.
   const handleTemplateChange = (templateId) => {
     setSelectedTemplateId(templateId);
     const selectedTemplate = templates.find(
       (template) => template.id === templateId
     );
-    onUpdateNodeData({
-      ...selectedNode,
-      data: {
-        ...selectedNode.data,
-        templateId,
-        selectedTemplate,
-      },
+    const newLLMConfig = (selectedTemplate && selectedTemplate.llmconfig) || defaultLLMConfig;
+    updateNodeField({
+      templateId,
+      selectedTemplate,
+      llmconfig: newLLMConfig,
     });
   };
 
+  // Update showConversation without resetting other node data.
+  const handleShowConversationChange = (value) => {
+    setShowConversation(value);
+    updateNodeField({
+      showConversation: value,
+    });
+  };
+
+  // ... (other handlers remain unchanged)
+
   const addOption = () => {
-    setOptions([...options, '']);
+    const newOptions = [...options, ''];
+    setOptions(newOptions);
+    updateNodeField({ options: newOptions });
   };
 
   const removeOption = (index) => {
     const newOptions = options.filter((_, i) => i !== index);
     setOptions(newOptions);
-    onUpdateNodeData({
-      ...selectedNode,
-      data: { ...selectedNode.data, options: newOptions },
-    });
+    updateNodeField({ options: newOptions });
   };
 
   return (
@@ -122,9 +112,7 @@ const Sidebar = ({
         {/* Flow-Level Metadata Section */}
         <h4>Flow Metadata</h4>
         <div style={{ marginBottom: '10px' }}>
-          <label style={{ display: 'block', marginBottom: '5px' }}>
-            Flow Name:
-          </label>
+          <label style={{ display: 'block', marginBottom: '5px' }}>Flow Name:</label>
           <input
             type="text"
             value={flowName}
@@ -139,9 +127,7 @@ const Sidebar = ({
           />
         </div>
         <div style={{ marginBottom: '20px' }}>
-          <label style={{ display: 'block', marginBottom: '5px' }}>
-            Flow Description:
-          </label>
+          <label style={{ display: 'block', marginBottom: '5px' }}>Flow Description:</label>
           <textarea
             value={description}
             onChange={(e) => setDescription(e.target.value)}
@@ -164,7 +150,7 @@ const Sidebar = ({
               <input
                 type="text"
                 value={name}
-                onChange={(e) => handleNameChange(e.target.value)}
+                onChange={(e) => updateNodeField({ name: e.target.value })}
                 placeholder="Enter node name..."
                 style={{
                   width: '100%',
@@ -179,7 +165,7 @@ const Sidebar = ({
               <input
                 type="text"
                 value={label}
-                onChange={(e) => handleLabelChange(e.target.value)}
+                onChange={(e) => updateNodeField({ label: e.target.value })}
                 placeholder="Enter node label..."
                 style={{
                   width: '100%',
@@ -195,7 +181,7 @@ const Sidebar = ({
                   <label>Bot Response:</label>
                   <textarea
                     value={botResponse}
-                    onChange={(e) => handleBotResponseChange(e.target.value)}
+                    onChange={(e) => updateNodeField({ botResponse: e.target.value })}
                     placeholder="Enter bot response..."
                     style={{
                       width: '100%',
@@ -210,7 +196,7 @@ const Sidebar = ({
                   <label>Input Type:</label>
                   <select
                     value={inputType}
-                    onChange={(e) => handleInputTypeChange(e.target.value)}
+                    onChange={(e) => updateNodeField({ inputType: e.target.value })}
                     style={{
                       width: '100%',
                       padding: '5px',
@@ -238,9 +224,7 @@ const Sidebar = ({
                         <input
                           type="text"
                           value={option}
-                          onChange={(e) =>
-                            handleOptionsChange(index, e.target.value)
-                          }
+                          onChange={(e) => handleOptionsChange(index, e.target.value)}
                           placeholder={`Option ${index + 1}`}
                           style={{
                             flex: '1',
@@ -281,9 +265,7 @@ const Sidebar = ({
                   <select
                     id="template-select"
                     value={selectedTemplateId}
-                    onChange={(e) =>
-                      handleTemplateChange(e.target.value)
-                    }
+                    onChange={(e) => handleTemplateChange(e.target.value)}
                     style={{
                       width: '100%',
                       padding: '5px',
@@ -298,6 +280,17 @@ const Sidebar = ({
                       </option>
                     ))}
                   </select>
+                </div>
+                <div style={{ marginBottom: '10px' }}>
+                  <input
+                    type="checkbox"
+                    id="showConversation"
+                    checked={showConversation}
+                    onChange={(e) => handleShowConversationChange(e.target.checked)}
+                  />
+                  <label htmlFor="showConversation" style={{ marginLeft: '5px' }}>
+                    Show Conversation
+                  </label>
                 </div>
               </>
             )}

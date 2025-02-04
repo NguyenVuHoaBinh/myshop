@@ -10,10 +10,10 @@ import org.springframework.data.elasticsearch.annotations.FieldType;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotEmpty;
 import java.util.List;
-import java.util.Map;
 
 @Data
 @Document(indexName = "flows") // Elasticsearch index for flows
+@JsonIgnoreProperties(ignoreUnknown = true) // Ignore any extra fields at the top level
 public class Flow {
 
     @Id
@@ -54,6 +54,7 @@ public class Flow {
     private String createdBy;
 
     @Data
+    @JsonIgnoreProperties(ignoreUnknown = true)
     public static class Node {
 
         @Field(type = FieldType.Keyword)
@@ -71,8 +72,8 @@ public class Flow {
         private NodeData data;
 
         @Data
+        @JsonIgnoreProperties(ignoreUnknown = true)
         public static class Position {
-
             @Field(type = FieldType.Float)
             private float x;
 
@@ -81,6 +82,7 @@ public class Flow {
         }
 
         @Data
+        @JsonIgnoreProperties(ignoreUnknown = true)
         public static class NodeData {
 
             @Field(type = FieldType.Text)
@@ -95,10 +97,41 @@ public class Flow {
             @Field(type = FieldType.Keyword)
             private String templateId;
 
+            // This field is for selected template details.
             @Field(type = FieldType.Object)
             private SelectedTemplate selectedTemplate;
 
+            // Indicates whether the conversation should be shown (defaults to true)
+            @Field(type = FieldType.Boolean)
+            private Boolean showConversation;
+
+            /**
+             * Grouping for LLM configuration parameters.
+             * This object contains settings for the AI model,
+             * such as the model identifier, temperature, max tokens, and a streaming flag.
+             * It is typically used by LLM nodes.
+             */
+            @Field(type = FieldType.Object)
+            private LLMConfig llmconfig;
+
             @Data
+            @JsonIgnoreProperties(ignoreUnknown = true)
+            public static class LLMConfig {
+                @Field(type = FieldType.Keyword)
+                private String aiModel; // e.g., "gpt-4o", "gpt-4o-mini", etc.
+
+                @Field(type = FieldType.Float)
+                private Double temperature;
+
+                @Field(type = FieldType.Integer)
+                private Integer max_tokens;
+
+                @Field(type = FieldType.Boolean)
+                private Boolean stream;
+            }
+
+            @Data
+            @JsonIgnoreProperties(ignoreUnknown = true)
             public static class SelectedTemplate {
 
                 @Field(type = FieldType.Keyword)
@@ -125,10 +158,9 @@ public class Flow {
                 @Field(type = FieldType.Text)
                 private String systemPrompt;
 
-                @Field(type = FieldType.Keyword)
-                private String aiModel;
+                // Removed the redundant "aiModel" field since LLM configuration is handled in llmconfig
 
-                // Add these two fields to match your JSON payload
+                // Fields to match your JSON payload
                 @Field(type = FieldType.Date)
                 private String createdAt;
 
@@ -136,6 +168,7 @@ public class Flow {
                 private String updatedAt;
 
                 @Data
+                @JsonIgnoreProperties(ignoreUnknown = true)
                 public static class FieldDetails {
                     @Field(type = FieldType.Text)
                     private String fieldName;
@@ -144,13 +177,11 @@ public class Flow {
                     private String fieldType;
                 }
             }
-
-
-
         }
     }
 
     @Data
+    @JsonIgnoreProperties(ignoreUnknown = true)
     public static class Edge {
 
         @Field(type = FieldType.Keyword)

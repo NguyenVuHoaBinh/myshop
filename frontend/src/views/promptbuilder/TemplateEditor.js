@@ -6,7 +6,6 @@ import {
   CCardHeader,
   CSpinner,
   CAlert,
-  CFormInput,
   CFormLabel,
   CRow,
   CCol,
@@ -16,21 +15,198 @@ import {
   CContainer,
 } from "@coreui/react";
 
+/* ------------------- Helper UI Components ------------------- */
+const LoadingSpinner = () => (
+  <div className="text-center my-4">
+    <CSpinner color="primary" />
+  </div>
+);
+
+const ErrorAlert = ({ message }) => <CAlert color="danger">{message}</CAlert>;
+
+/* ------------------- Prompt Editor Panel ------------------- */
+const PromptEditorPanel = ({ template, onInputChange }) => (
+  <CCard className="mb-4">
+    <CCardHeader>
+      <h4>Prompt Editor</h4>
+    </CCardHeader>
+    <CCardBody>
+      <CFormTextarea
+        rows="8"
+        value={template.systemPrompt || ""}
+        onChange={(e) => onInputChange("systemPrompt", e.target.value)}
+        placeholder="Write your prompt here..."
+      />
+      <CRow className="mt-4">
+        <CCol>
+          <CFormLabel>Resource</CFormLabel>
+          <CFormSelect
+            value={template.resource || ""}
+            onChange={(e) => onInputChange("resource", e.target.value)}
+          >
+            <option value="">Select a resource...</option>
+            <option value="Flows">Flows</option>
+            <option value="Apex">Apex</option>
+          </CFormSelect>
+        </CCol>
+        <CCol>
+          <CFormLabel>Object Field</CFormLabel>
+          <CFormSelect
+            value={`${template.object || ""}.${template.objectField || ""}`}
+            onChange={(e) => {
+              const [object, objectField] = e.target.value.split(".");
+              onInputChange("object", object);
+              onInputChange("objectField", objectField);
+            }}
+          >
+            <option value="">Select an object field...</option>
+            {template.objectFields?.map((field, index) => (
+              <option key={index} value={`${template.object || "object"}.${field}`}>
+                {`${template.object || "object"}.${field}`}
+              </option>
+            ))}
+          </CFormSelect>
+        </CCol>
+      </CRow>
+    </CCardBody>
+  </CCard>
+);
+
+/* ------------------- LLM Config Component ------------------- */
+const LLMConfig = ({ llmconfig, onLLMConfigChange }) => (
+  <CCard>
+    <CCardHeader>
+      <h5>LLM Config</h5>
+    </CCardHeader>
+    <CCardBody>
+      <div className="mb-3">
+        <CFormLabel>Model Type</CFormLabel>
+        <CFormSelect
+          value={llmconfig?.aiModel || ""}
+          onChange={(e) => onLLMConfigChange("aiModel", e.target.value)}
+        >
+          {/* Note: The option values below represent the internal value to store. */}
+          <option value="gpt-4o">gpt-4o</option>
+          <option value="gpt-4o-mini">gpt-4o-mini</option>
+          <option value="o3-mini">o3-mini</option>
+        </CFormSelect>
+      </div>
+      <div className="mb-3">
+        <CFormLabel>
+          Temperature: {llmconfig?.temperature !== undefined ? llmconfig.temperature : 0.7}
+        </CFormLabel>
+        <input
+          type="range"
+          className="form-range"
+          min="0"
+          max="2"
+          step="0.1"
+          value={llmconfig?.temperature !== undefined ? llmconfig.temperature : 0.7}
+          onChange={(e) =>
+            onLLMConfigChange("temperature", parseFloat(e.target.value))
+          }
+        />
+      </div>
+      <div className="mb-3">
+        <CFormLabel>
+          Max Tokens: {llmconfig?.max_tokens !== undefined ? llmconfig.max_tokens : 100}
+        </CFormLabel>
+        <input
+          type="range"
+          className="form-range"
+          min="1"
+          max="16383"
+          step="1"
+          value={llmconfig?.max_tokens !== undefined ? llmconfig.max_tokens : 100}
+          onChange={(e) =>
+            onLLMConfigChange("max_tokens", parseInt(e.target.value, 10))
+          }
+        />
+      </div>
+      <div className="mb-3 form-check">
+        <input
+          type="checkbox"
+          className="form-check-input"
+          id="streamCheck"
+          checked={llmconfig?.stream || false}
+          onChange={(e) => onLLMConfigChange("stream", e.target.checked)}
+        />
+        <label className="form-check-label" htmlFor="streamCheck">
+          Stream
+        </label>
+      </div>
+    </CCardBody>
+  </CCard>
+);
+
+/* ------------------- Preview Panel ------------------- */
+const PreviewPanel = ({ previewLoading, previewResult }) => (
+  <CRow className="mt-4">
+    <CCol md={6}>
+      <CCard>
+        <CCardHeader>
+          <h6>Preview</h6>
+        </CCardHeader>
+        <CCardBody>
+          {previewLoading ? (
+            <div className="text-center">
+              <CSpinner color="info" />
+              <p>Generating preview...</p>
+            </div>
+          ) : previewResult ? (
+            <>
+              <h6>Combined Prompt</h6>
+              <pre>{previewResult.combinedPrompt}</pre>
+            </>
+          ) : (
+            <p>No preview available.</p>
+          )}
+        </CCardBody>
+      </CCard>
+    </CCol>
+    <CCol md={6}>
+      <CCard>
+        <CCardHeader>
+          <h6>Response</h6>
+        </CCardHeader>
+        <CCardBody>
+          {previewLoading ? (
+            <div className="text-center">
+              <CSpinner color="info" />
+              <p>Fetching response...</p>
+            </div>
+          ) : previewResult ? (
+            <>
+              <h6>Response</h6>
+              <pre>{previewResult.response}</pre>
+            </>
+          ) : (
+            <p>No response available.</p>
+          )}
+        </CCardBody>
+      </CCard>
+    </CCol>
+  </CRow>
+);
+
+/* ------------------- Main TemplateEditor Component ------------------- */
 const TemplateEditor = () => {
   const location = useLocation();
   const navigate = useNavigate();
   const { id } = useParams();
+
   const [template, setTemplate] = useState(location.state || null);
   const [loading, setLoading] = useState(!location.state);
   const [error, setError] = useState(null);
   const [previewLoading, setPreviewLoading] = useState(false);
   const [previewResult, setPreviewResult] = useState(null);
 
-  // Fetch template data if no state is passed
+  // Fetch template if not provided via state
   useEffect(() => {
     if (!template) {
       fetchTemplate();
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [id]);
 
   const fetchTemplate = async () => {
@@ -42,6 +218,15 @@ const TemplateEditor = () => {
         throw new Error(`Error fetching template: ${response.statusText}`);
       }
       const data = await response.json();
+      // Ensure llmconfig exists in the fetched template
+      if (!data.llmconfig) {
+        data.llmconfig = {
+          aiModel: "gpt-4o",
+          temperature: 0.7,
+          max_tokens: 100,
+          stream: false,
+        };
+      }
       setTemplate(data);
     } catch (err) {
       console.error(err);
@@ -51,10 +236,26 @@ const TemplateEditor = () => {
     }
   };
 
+  // Update top-level fields
   const handleInputChange = (key, value) => {
-    setTemplate({ ...template, [key]: value });
+    setTemplate((prev) => ({
+      ...prev,
+      [key]: value,
+    }));
   };
 
+  // Update nested LLM configuration fields
+  const handleLLMConfigChange = (key, value) => {
+    setTemplate((prev) => ({
+      ...prev,
+      llmconfig: {
+        ...prev.llmconfig,
+        [key]: value,
+      },
+    }));
+  };
+
+  // Save payload – the nested llmconfig is already stored
   const handleSave = async () => {
     try {
       const response = await fetch(`http://localhost:8888/api/templates/${id || ""}`, {
@@ -72,28 +273,32 @@ const TemplateEditor = () => {
     }
   };
 
+  // Build preview payload using nested llmconfig values.
+  // Note: We now use the exact value stored in llmconfig.aiModel.
   const handlePreview = async () => {
     setPreviewLoading(true);
     setPreviewResult(null);
     try {
+      const requestBody = {
+        templateId: id,
+        message: "Generate sample result for the system role",
+        llmconfig: {
+          modelType: template.llmconfig.aiModel,
+          temperature: template.llmconfig.temperature,
+          max_tokens: template.llmconfig.max_tokens,
+          stream: template.llmconfig.stream,
+        },
+      };
+
       const response = await fetch("http://localhost:8888/api/v1/ai/preview", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          modelType: template.aiModel || "openai",
-          templateId: id,
-          message: "Generate sample result for the system role",
-          config: {
-            temperature: 0.7,
-            max_tokens: 150,
-          },
-        }),
+        body: JSON.stringify(requestBody),
       });
 
       if (!response.ok) {
         throw new Error("Failed to fetch preview.");
       }
-
       const data = await response.json();
       setPreviewResult(data);
     } catch (err) {
@@ -105,15 +310,11 @@ const TemplateEditor = () => {
   };
 
   if (loading) {
-    return (
-      <div className="text-center">
-        <CSpinner color="primary" />
-      </div>
-    );
+    return <LoadingSpinner />;
   }
 
   if (error) {
-    return <CAlert color="danger">{error}</CAlert>;
+    return <ErrorAlert message={error} />;
   }
 
   if (!template) {
@@ -122,7 +323,7 @@ const TemplateEditor = () => {
 
   return (
     <CContainer className="mt-4">
-      {/* Save and Return Buttons */}
+      {/* Navigation Buttons */}
       <div className="d-flex justify-content-between mb-3">
         <CButton color="secondary" onClick={() => navigate("/")}>
           Return
@@ -132,132 +333,18 @@ const TemplateEditor = () => {
         </CButton>
       </div>
 
-      {/* Main Content */}
-      <CCard>
-        <CCardHeader>
-          <h4>Prompt Template Workspace</h4>
-          <p>
-            Create a prompt template with natural language instructions grounded
-            in CRM data using the Role, Task, and Format framework. Define the
-            role, describe the model's actions, and specify the response format.
-          </p>
-        </CCardHeader>
-        <CCardBody>
-          <CRow>
-            {/* Left Column */}
-            <CCol md={9}>
-              <h5>Prompt Editor</h5>
-              <CFormTextarea
-                rows="8"
-                value={template.systemPrompt || ""}
-                onChange={(e) => handleInputChange("systemPrompt", e.target.value)}
-                placeholder="Write your prompt here..."
-              />
-              <CRow className="mt-4">
-                <CCol>
-                  <CFormLabel>Resource</CFormLabel>
-                  <CFormSelect
-                    value={template.resource || ""}
-                    onChange={(e) => handleInputChange("resource", e.target.value)}
-                  >
-                    <option value="">Select a resource...</option>
-                    <option value="Flows">Flows</option>
-                    <option value="Apex">Apex</option>
-                  </CFormSelect>
-                </CCol>
-                <CCol>
-                  <CFormLabel>Object Field</CFormLabel>
-                  <CFormSelect
-                    value={`${template.object || ""}.${template.objectField || ""}`}
-                    onChange={(e) => {
-                      const [object, objectField] = e.target.value.split(".");
-                      setTemplate({ ...template, object, objectField });
-                    }}
-                  >
-                    <option value="">Select an object field...</option>
-                    {template.objectFields?.map((field, index) => (
-                      <option key={index} value={`${template.object || "object"}.${field}`}>
-                        {`${template.object || "object"}.${field}`}
-                      </option>
-                    ))}
-                  </CFormSelect>
-                </CCol>
-              </CRow>
-            </CCol>
-
-            {/* Right Column */}
-            <CCol md={3}>
-              <h5>Configuration</h5>
-              <div className="mb-3">
-                <CFormLabel>Model Type</CFormLabel>
-                <CFormSelect
-                  value={template.aiModel || ""}
-                  onChange={(e) => handleInputChange("aiModel", e.target.value)}
-                >
-                  <option value="OpenAI GPT-3.5 Turbo">OpenAI GPT-3.5 Turbo</option>
-                  <option value="Standard">Standard</option>
-                </CFormSelect>
-              </div>
-              <div className="mb-3">
-                <CFormLabel>Response Language Settings</CFormLabel>
-                <CFormInput
-                  type="text"
-                  value={template.allowedLanguages?.join(", ") || ""}
-                  readOnly
-                />
-              </div>
-            </CCol>
-          </CRow>
-        </CCardBody>
-      </CCard>
-
-      {/* Bottom Section */}
-      <CRow className="mt-4">
-        <CCol md={6}>
-          <CCard>
-            <CCardHeader>
-              <h6>Preview</h6>
-            </CCardHeader>
-            <CCardBody>
-              {previewLoading ? (
-                <div className="text-center">
-                  <CSpinner color="info" />
-                  <p>Generating preview...</p>
-                </div>
-              ) : previewResult ? (
-                <>
-                  <h6>Combined Prompt</h6>
-                  <pre>{previewResult.combinedPrompt}</pre>
-                </>
-              ) : (
-                <p>No preview available.</p>
-              )}
-            </CCardBody>
-          </CCard>
+      {/* Main Panels: Left Prompt Editor & Right LLM Config */}
+      <CRow>
+        <CCol md={9}>
+          <PromptEditorPanel template={template} onInputChange={handleInputChange} />
         </CCol>
-        <CCol md={6}>
-          <CCard>
-            <CCardHeader>
-              <h6>Response</h6>
-            </CCardHeader>
-            <CCardBody>
-              {previewLoading ? (
-                <div className="text-center">
-                  <CSpinner color="info" />
-                  <p>Fetching response...</p>
-                </div>
-              ) : previewResult ? (
-                <>
-                  <h6>Response</h6>
-                  <pre>{previewResult.response}</pre>
-                </>
-              ) : (
-                <p>No response available.</p>
-              )}
-            </CCardBody>
-          </CCard>
+        <CCol md={3}>
+          <LLMConfig llmconfig={template.llmconfig} onLLMConfigChange={handleLLMConfigChange} />
         </CCol>
       </CRow>
+
+      {/* Preview & Response Panels */}
+      <PreviewPanel previewLoading={previewLoading} previewResult={previewResult} />
 
       {/* Preview Button */}
       <div className="text-center mt-4">
