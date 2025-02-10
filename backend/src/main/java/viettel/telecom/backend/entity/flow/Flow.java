@@ -10,6 +10,7 @@ import org.springframework.data.elasticsearch.annotations.FieldType;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotEmpty;
 import java.util.List;
+import java.util.Map;
 
 @Data
 @Document(indexName = "flows") // Elasticsearch index for flows
@@ -53,6 +54,9 @@ public class Flow {
     @NotBlank(message = "CreatedBy cannot be blank")
     private String createdBy;
 
+    // -------------------------------------------------------------
+    // Inner classes: Node, Edge
+    // -------------------------------------------------------------
     @Data
     @JsonIgnoreProperties(ignoreUnknown = true)
     public static class Node {
@@ -63,13 +67,19 @@ public class Flow {
 
         @Field(type = FieldType.Keyword)
         @NotBlank(message = "Node type cannot be blank")
-        private String type; // e.g., startNode, endNode, interactionNode, llmNode, logicNode
+        private String type; // e.g., "DATA", "LLM", "LOGIC", etc.
 
         @Field(type = FieldType.Object)
         private Position position;
 
         @Field(type = FieldType.Object)
         private NodeData data;
+
+        // If your flow engine uses a 'next' property at the node level,
+        // keep it here or manage it via edges. Some flows store next node as edges only.
+        // We'll keep it optional in case you want it.
+        @Field(type = FieldType.Keyword)
+        private String next;
 
         @Data
         @JsonIgnoreProperties(ignoreUnknown = true)
@@ -97,7 +107,7 @@ public class Flow {
             @Field(type = FieldType.Keyword)
             private String templateId;
 
-            // This field is for selected template details.
+            // This field is for selected template details (LLM usage, etc.)
             @Field(type = FieldType.Object)
             private SelectedTemplate selectedTemplate;
 
@@ -105,14 +115,44 @@ public class Flow {
             @Field(type = FieldType.Boolean)
             private Boolean showConversation;
 
-            /**
-             * Grouping for LLM configuration parameters.
-             * This object contains settings for the AI model,
-             * such as the model identifier, temperature, max tokens, and a streaming flag.
-             * It is typically used by LLM nodes.
-             */
+            // LLM config group
             @Field(type = FieldType.Object)
             private LLMConfig llmconfig;
+
+            // -----------------------------
+            // NEW FIELDS FOR DATA NODE
+            // -----------------------------
+
+            /**
+             * The URL endpoint to which we'll POST data.
+             * May contain placeholders like "/api/[entity]/create".
+             */
+            @Field(type = FieldType.Text)
+            private String requestUrl;
+
+            /**
+             * The body payload for the POST request.
+             * This can be any JSON structure, so we store it as a Map.
+             * It may contain placeholders like "[groupName]".
+             */
+            @Field(type = FieldType.Object)
+            private Map<String, Object> requestBody;
+
+            /**
+             * The next node ID if this request is successful.
+             */
+            @Field(type = FieldType.Text)
+            private String onSuccessNextNode;
+
+            /**
+             * The next node ID if this request fails (error fallback).
+             */
+            @Field(type = FieldType.Text)
+            private String onErrorNextNode;
+
+            // ---------------------------------------------------------
+            // Inner classes for LLM usage or selected templates
+            // ---------------------------------------------------------
 
             @Data
             @JsonIgnoreProperties(ignoreUnknown = true)
@@ -158,9 +198,6 @@ public class Flow {
                 @Field(type = FieldType.Text)
                 private String systemPrompt;
 
-                // Removed the redundant "aiModel" field since LLM configuration is handled in llmconfig
-
-                // Fields to match your JSON payload
                 @Field(type = FieldType.Date)
                 private String createdAt;
 
@@ -198,6 +235,6 @@ public class Flow {
 
         @Field(type = FieldType.Keyword)
         @NotBlank(message = "Edge type cannot be blank")
-        private String type; // e.g., animatedEdge
+        private String type; // e.g., "animatedEdge"
     }
 }

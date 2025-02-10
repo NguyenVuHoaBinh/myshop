@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import Draggable from 'react-draggable';
 
-// Assume defaultLLMConfig is imported or defined in this file.
+// Example default LLM config (adjust to your needs)
 const defaultLLMConfig = {
   aiModel: "gpt-4o",
   temperature: 0.7,
@@ -18,18 +18,26 @@ const Sidebar = ({
   setFlowName,
   setDescription,
 }) => {
-  // Node-specific state
-  const [name, setName] = useState('');
-  const [label, setLabel] = useState('');
-  const [botResponse, setBotResponse] = useState('');
+  // --------------------------------
+  // Flow-Level State
+  // --------------------------------
+  // Keep these controlled from props to demonstrate local usage is optional
+  // If you also have the single-char issue here, you can do a local approach as well.
+
+  // Node-level local states:
+  // We use local states for text fields so they aren't overwritten on each keypress re-render
+  const [localName, setLocalName] = useState('');
+  const [localLabel, setLocalLabel] = useState('');
+  const [localBotResponse, setLocalBotResponse] = useState('');
+
   const [inputType, setInputType] = useState('text');
   const [options, setOptions] = useState([]);
   const [selectedTemplateId, setSelectedTemplateId] = useState('');
   const [showConversation, setShowConversation] = useState(false);
 
-  // Synchronize the node's data with the state
   useEffect(() => {
     if (selectedNode) {
+      // Destructure the node data
       const {
         name,
         label,
@@ -39,35 +47,72 @@ const Sidebar = ({
         templateId,
         showConversation,
       } = selectedNode.data || {};
-      setName(name || '');
-      setLabel(label || '');
-      setBotResponse(botResponse || '');
+
+      // Update our local states with these values
+      setLocalName(name || '');
+      setLocalLabel(label || '');
+      setLocalBotResponse(botResponse || '');
       setInputType(inputType || 'text');
       setOptions(options || []);
       setSelectedTemplateId(templateId || '');
       setShowConversation(showConversation || false);
+    } else {
+      // If no node is selected, reset local states
+      setLocalName('');
+      setLocalLabel('');
+      setLocalBotResponse('');
+      setInputType('text');
+      setOptions([]);
+      setSelectedTemplateId('');
+      setShowConversation(false);
     }
   }, [selectedNode]);
 
-  // Handler to update node data while preserving existing fields.
-  const updateNodeField = (updatedData) => {
+  // A helper to fully update the node's data in the flow store
+  // while preserving fields that we haven't touched locally.
+  const updateNodeField = (updatedFields) => {
+    if (!selectedNode) return;
     onUpdateNodeData({
       ...selectedNode,
       data: {
         ...selectedNode.data,
-        ...updatedData,
+        ...updatedFields,
       },
     });
   };
 
-  // Handle template selection: update node data with selected template
-  // and copy its LLM configuration (if available); otherwise, use the default.
+  // Called after finishing editing text fields (onBlur) to persist to store
+  const commitName = () => {
+    updateNodeField({ name: localName });
+  };
+  const commitLabel = () => {
+    updateNodeField({ label: localLabel });
+  };
+  const commitBotResponse = () => {
+    updateNodeField({ botResponse: localBotResponse });
+  };
+
+  // For changing inputType, we can update store immediately
+  const handleInputTypeChange = (newType) => {
+    setInputType(newType);
+    updateNodeField({ inputType: newType });
+  };
+
+  // Updating showConversation
+  const handleShowConversationChange = (value) => {
+    setShowConversation(value);
+    updateNodeField({ showConversation: value });
+  };
+
+  // Handle template selection
   const handleTemplateChange = (templateId) => {
     setSelectedTemplateId(templateId);
     const selectedTemplate = templates.find(
       (template) => template.id === templateId
     );
-    const newLLMConfig = (selectedTemplate && selectedTemplate.llmconfig) || defaultLLMConfig;
+    const newLLMConfig =
+      (selectedTemplate && selectedTemplate.llmconfig) || defaultLLMConfig;
+
     updateNodeField({
       templateId,
       selectedTemplate,
@@ -75,15 +120,13 @@ const Sidebar = ({
     });
   };
 
-  // Update showConversation without resetting other node data.
-  const handleShowConversationChange = (value) => {
-    setShowConversation(value);
-    updateNodeField({
-      showConversation: value,
-    });
+  // For multi-option input types (dropdown/radio)
+  const handleOptionsChange = (index, value) => {
+    const newOptions = [...options];
+    newOptions[index] = value;
+    setOptions(newOptions);
+    updateNodeField({ options: newOptions });
   };
-
-  // ... (other handlers remain unchanged)
 
   const addOption = () => {
     const newOptions = [...options, ''];
@@ -147,10 +190,12 @@ const Sidebar = ({
             <h4>Node Properties</h4>
             <div>
               <label>Name:</label>
+              {/* Use localName so we can type freely */}
               <input
                 type="text"
-                value={name}
-                onChange={(e) => updateNodeField({ name: e.target.value })}
+                value={localName}
+                onChange={(e) => setLocalName(e.target.value)}
+                onBlur={commitName} // commit to store on blur
                 placeholder="Enter node name..."
                 style={{
                   width: '100%',
@@ -164,8 +209,9 @@ const Sidebar = ({
               <label>Label:</label>
               <input
                 type="text"
-                value={label}
-                onChange={(e) => updateNodeField({ label: e.target.value })}
+                value={localLabel}
+                onChange={(e) => setLocalLabel(e.target.value)}
+                onBlur={commitLabel} // commit to store on blur
                 placeholder="Enter node label..."
                 style={{
                   width: '100%',
@@ -175,13 +221,16 @@ const Sidebar = ({
                 }}
               />
             </div>
+
+            {/* If this is an interactionNode, show related fields */}
             {selectedNode.type === 'interactionNode' && (
               <>
                 <div>
                   <label>Bot Response:</label>
                   <textarea
-                    value={botResponse}
-                    onChange={(e) => updateNodeField({ botResponse: e.target.value })}
+                    value={localBotResponse}
+                    onChange={(e) => setLocalBotResponse(e.target.value)}
+                    onBlur={commitBotResponse} // commit on blur
                     placeholder="Enter bot response..."
                     style={{
                       width: '100%',
@@ -196,7 +245,7 @@ const Sidebar = ({
                   <label>Input Type:</label>
                   <select
                     value={inputType}
-                    onChange={(e) => updateNodeField({ inputType: e.target.value })}
+                    onChange={(e) => handleInputTypeChange(e.target.value)}
                     style={{
                       width: '100%',
                       padding: '5px',
@@ -258,6 +307,8 @@ const Sidebar = ({
                 )}
               </>
             )}
+
+            {/* If this is an LLM node, show template selection */}
             {selectedNode.type === 'llmNode' && (
               <>
                 <div>

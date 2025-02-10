@@ -41,56 +41,61 @@ public class FlowExecutor {
      * Process a single node, performing its action and returning the ID
      * of the next node (or null if the flow ends here).
      *
-     * @param flow    The entire Flow, so we can look up edges
-     * @param node    The current Node to process
-     * @param context Execution context (including user response, etc.)
-     * @param session WebSocket session (may be null if not using websockets)
-     * @return Next node ID, or null if no next node or flow ended
+     * If the node is auto-chained (like a data node or an LLM node with
+     * showConversation=false), we immediately process the next node
+     * instead of returning its ID.
      */
     public String processNode(Flow flow, Node node, Map<String, Object> context, WebSocketSession session) {
         try {
             logger.debug("processNode() - ID: {}, Type: {}", node.getId(), node.getType());
 
             switch (node.getType()) {
-                case "interactionNode":
-                    // Send a bot response (if we have a WebSocket session)
+                case "interactionNode": {
+                    // 1) Possibly send a bot response
                     String botResponse = node.getData().getBotResponse();
                     if (botResponse != null && !botResponse.isEmpty()) {
                         sendMessage(session, botResponse);
                         logger.info("Sent bot response: {}", botResponse);
                     }
-
-                    // Capture user response from context (if provided)
+                    // 2) Capture user response from context, if any
                     String userResponse = (String) context.get("userResponse");
                     if (userResponse != null) {
                         logger.info("User response received: {}", userResponse);
-                        context.put("userResponse", userResponse);
                     }
                     break;
+                }
 
-                case "dataNode":
+                case "dataNode": {
+                    // 1) Process the data node
                     dataHandler.handle(node, context);
                     logger.info("Data node processed: {}", node.getId());
-                    break;
 
-                case "llmNode":
-                    // Call the LLM handler to generate a response
+                    // 2) Immediately auto-process the next node
+                    Node nextNode = getNextNode(flow, node);
+                    if (nextNode == null) {
+                        logger.info("No more edges from node: {} => flow ended.", node.getId());
+                        sendMessage(session, "Flow ended. No further nodes.");
+                        return null;
+                    }
+                    // Re-enter processNode for chaining
+                    return processNode(flow, nextNode, context, session);
+                }
+
+                case "llmNode": {
+                    // 1) Generate a response
                     llmHandler.handle(node, context, session);
                     String llmResponse = (String) context.get("llmResponse");
 
-                    // Determine whether to show conversation based on the flag.
-                    // Default to true if the flag is not set.
+                    // 2) Check if showConversation is false => auto-chain
                     Boolean showConversation = (node.getData() != null && node.getData().getShowConversation() != null)
                             ? node.getData().getShowConversation() : Boolean.TRUE;
 
                     if (Boolean.FALSE.equals(showConversation)) {
-                        // If showConversation is false:
-                        // 1. Update the context so that the llmResponse becomes the "userResponse"
+                        // Auto-chain to next node
                         context.put("userResponse", llmResponse);
-                        logger.info("LLM node (ID: {}) with showConversation=false. " +
-                                "Auto-processing next node with userResponse: {}", node.getId(), llmResponse);
+                        logger.info("LLM node (ID: {}) with showConversation=false; auto-chaining to next node. userResponse={}",
+                                node.getId(), llmResponse);
 
-                        // 2. Get the next node and immediately process it.
                         Node nextNode = getNextNode(flow, node);
                         if (nextNode == null) {
                             logger.info("No more edges from node: {} => flow ended.", node.getId());
@@ -99,27 +104,30 @@ public class FlowExecutor {
                         }
                         return processNode(flow, nextNode, context, session);
                     } else {
-                        // If showConversation is true, behave normally: send the LLM response to the user.
+                        // Normal case: send the LLM response to the user
                         if (llmResponse != null && session != null && session.isOpen()) {
                             sendMessage(session, llmResponse);
                             logger.info("LLM response sent: {}", llmResponse);
                         }
                     }
                     break;
+                }
 
-                case "endNode":
+                case "endNode": {
                     logger.info("Reached end node: {}", node.getId());
                     sendMessage(session, "Flow completed at end node: " + node.getId());
                     return null;
+                }
 
-                default:
+                default: {
                     logger.warn("Unknown node type encountered: {}", node.getType());
                     sendMessage(session, "Unknown node type: " + node.getType());
                     throw new IllegalArgumentException("Unknown node type: " + node.getType());
+                }
             }
 
-            // For nodes that were not auto-chained (like interaction or data nodes, or LLM nodes with showConversation=true)
-            // find the next node via global edges.
+            // If we reach here, it means we have a normal or "non-auto-chaining" node.
+            // So we just find the next node but do NOT auto-process it. We return the next node ID.
             Node nextNode = getNextNode(flow, node);
             if (nextNode == null) {
                 logger.info("No more edges from node: {} => flow ended.", node.getId());
@@ -134,7 +142,6 @@ public class FlowExecutor {
             throw new RuntimeException("Error processing node: " + e.getMessage(), e);
         }
     }
-
 
     /**
      * Locates the next node by searching for the first edge whose

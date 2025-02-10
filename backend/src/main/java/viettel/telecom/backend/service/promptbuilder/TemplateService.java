@@ -11,9 +11,7 @@ import viettel.telecom.backend.exception.TemplateNotFoundException;
 import viettel.telecom.backend.repository.promptbuilder.TemplateRepository;
 
 import java.time.LocalDate;
-import java.time.LocalDateTime;
 import java.util.List;
-import java.util.UUID;
 
 @Slf4j
 @Service

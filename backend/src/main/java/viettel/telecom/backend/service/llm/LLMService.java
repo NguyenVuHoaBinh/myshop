@@ -23,19 +23,19 @@ public class LLMService {
             throw new IllegalArgumentException("Model type cannot be null");
         }
 
-        // (Optional) Normalize modelType here (for example, mapping gpt-4o-mini to "openai")
-        String key = modelType.toLowerCase();
-        // For simplicity, assume your OpenAIHandler is registered under "openai"
-        if (key.equals("gpt-4o") || key.equals("gpt-4o-mini") || key.equals("gpt-3o")) {
-            key = "openai";
-        }
-
-        ModelHandler handler = modelHandlers.get(key);
-        if (handler == null) {
+        // Use the enum to resolve the model type to its canonical key
+        String resolvedKey = ModelType.resolve(modelType);
+        if (resolvedKey == null) {
             throw new IllegalArgumentException("Unsupported model type: " + modelType);
         }
 
-        System.out.println("Resolved model type: " + key);
+        // Retrieve the appropriate handler based on the canonical key
+        ModelHandler handler = modelHandlers.get(resolvedKey);
+        if (handler == null) {
+            throw new IllegalArgumentException("No handler found for model type: " + resolvedKey);
+        }
+
+        System.out.println("Resolved model type: " + resolvedKey);
         System.out.println("System Prompt: " + systemPrompt);
         System.out.println("User Input: " + userInput);
         System.out.println("Config: " + config);

@@ -4,7 +4,8 @@ import java.util.List;
 
 public enum ModelType {
     // All acceptable variants for OpenAI are mapped to the canonical key "openai"
-    OPENAI("openai", List.of("gpt-4o", "gpt-4o-mini", "gpt-3o"));
+    OPENAI("openai", List.of("gpt-4o", "gpt-4o-mini", "gpt-o3-mini")),
+    DEEPSEEK("deepseek", List.of("deepseek-chat","deepseek-reasoner"));
 
     private final String key;
     private final List<String> aliases;
