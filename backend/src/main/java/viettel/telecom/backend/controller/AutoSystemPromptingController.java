@@ -72,10 +72,10 @@ public class AutoSystemPromptingController {
         // 3) Prepare default config for LLM
         //    modelType or "deepseek" is recognized by your LLMService
         Map<String, Object> config = new HashMap<>();
-        config.put("modelType", "deepseek-chat");
+        config.put("modelType", "deepseek-reasoner");
         // You can set any other default params here (temperature, max_tokens, etc.)
         config.put("temperature", 0);
-        config.put("max_tokens", 512);
+        config.put("max_tokens", 1024);
         config.put("stream", false);  // If you want streaming, set true and handle differently
 
         // 4) Send to LLM (DeepSeekHandler) using LLMService

@@ -8,6 +8,7 @@ import viettel.telecom.backend.entity.flow.Flow;
 import viettel.telecom.backend.entity.flow.Flow.Node;
 import viettel.telecom.backend.service.flow.FlowExecutor;
 import viettel.telecom.backend.service.flow.FlowService;
+import viettel.telecom.backend.service.redis.memory.ChatMemoryService;
 
 import java.io.IOException;
 import java.util.HashMap;
@@ -15,9 +16,7 @@ import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 
 /**
- * WebSocket handler that manages chat flow interactions (Approach B).
- * The start node is skipped, so we set currentNodeId to the next node
- * and only process that node on the subsequent message.
+ * WebSocket handler that manages chat flow interactions.
  */
 @Component
 public class ChatWebSocketHandler extends TextWebSocketHandler {
@@ -30,16 +29,25 @@ public class ChatWebSocketHandler extends TextWebSocketHandler {
 
     private final FlowService flowService;
     private final FlowExecutor flowExecutor;
+    private final ChatMemoryService chatMemoryService;
 
-    public ChatWebSocketHandler(FlowService flowService, FlowExecutor flowExecutor) {
+    public ChatWebSocketHandler(FlowService flowService,
+                                FlowExecutor flowExecutor,
+                                ChatMemoryService chatMemoryService) {
         this.flowService = flowService;
         this.flowExecutor = flowExecutor;
+        this.chatMemoryService = chatMemoryService;
     }
 
     @Override
     public void afterConnectionEstablished(WebSocketSession session) {
         sessions.put(session.getId(), session);
         System.out.println("New WebSocket connection: " + session.getId());
+
+        // Store session metadata in Redis (for example, just store the sessionId)
+        Map<String, String> metadata = new HashMap<>();
+        metadata.put("sessionId", session.getId());
+        chatMemoryService.storeSessionMetadata(session.getId(), metadata);
     }
 
     @Override
@@ -54,6 +62,9 @@ public class ChatWebSocketHandler extends TextWebSocketHandler {
             String flowId = (String) incomingData.getOrDefault("flowId", "");
             String userResponse = (String) incomingData.getOrDefault("userResponse", "");
             System.out.println("Received message: " + userResponse + " for flowId: " + flowId);
+
+            // ---- NEW: store the user message in Redis ----
+            chatMemoryService.storeUserChat(session.getId(), "user", userResponse);
 
             // Session-specific context
             Map<String, Object> context = sessionContexts.computeIfAbsent(
@@ -82,11 +93,7 @@ public class ChatWebSocketHandler extends TextWebSocketHandler {
             // Check if we already have a current node
             String currentNodeId = (String) context.get("currentNodeId");
 
-            // ---------------------------------------------------------------------
             // If currentNodeId == null, this is the first user message for this flow
-            // We skip the start node AND immediately process the next node
-            // so the user sees its response right away.
-            // ---------------------------------------------------------------------
             if (currentNodeId == null) {
                 // 1) Find the start node
                 Node startNode = flow.getNodes().stream()
@@ -108,11 +115,11 @@ public class ChatWebSocketHandler extends TextWebSocketHandler {
                         .findFirst()
                         .orElseThrow(() -> new IllegalArgumentException("Next node not found: " + nextNodeId));
 
-                // 3) Immediately process that next node, so its output is shown right away
+                // 3) Immediately process that next node
                 System.out.println("Auto-processing node after start: " + nextNodeId);
                 String followingNodeId = flowExecutor.processNode(flow, nextNode, context, session);
 
-                // 4) If that node leads to yet another node, store it in the context
+                // 4) If that node leads to another node, store it in the context
                 if (followingNodeId != null) {
                     context.put("currentNodeId", followingNodeId);
                     System.out.println("Flow paused at node: " + followingNodeId);
@@ -124,9 +131,7 @@ public class ChatWebSocketHandler extends TextWebSocketHandler {
                 return;
             }
 
-            // ---------------------------------------------------------------------
-            // Otherwise, we process the current node as usual
-            // ---------------------------------------------------------------------
+            // Otherwise, process the current node as usual
             Node currentNode = flow.getNodes().stream()
                     .filter(n -> n.getId().equals(currentNodeId))
                     .findFirst()
@@ -177,9 +182,13 @@ public class ChatWebSocketHandler extends TextWebSocketHandler {
     }
 
     /**
-     * Simple utility to send a message to the client (sender=bot).
+     * Utility to send a bot message to the client.
+     * Also store the message in Redis as an assistant message.
      */
     private void sendBotMessage(WebSocketSession session, String text) throws IOException {
+        // ---- Store bot message in Redis here as well (if you want) ----
+        chatMemoryService.storeUserChat(session.getId(), "assistant", text);
+
         Map<String, String> response = Map.of(
                 "sender", "bot",
                 "message", text

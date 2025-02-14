@@ -3,19 +3,21 @@ package viettel.telecom.backend.service.flow;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import org.springframework.web.socket.TextMessage;
 import org.springframework.web.socket.WebSocketSession;
 import viettel.telecom.backend.entity.flow.Flow;
 import viettel.telecom.backend.entity.flow.Flow.Node;
+import viettel.telecom.backend.service.redis.memory.ChatMemoryService;
 
 import java.io.IOException;
 import java.util.HashMap;
 import java.util.Map;
 
+
 /**
- * A single-step flow executor that uses global edges (Approach B).
- * We skip the startNode externally and call processNode(...) for each user turn.
+ * A single-step flow executor that processes each node.
  */
 @Service
 public class FlowExecutor {
@@ -27,11 +29,12 @@ public class FlowExecutor {
     private final LLMHandler llmHandler;
     private final ObjectMapper objectMapper = new ObjectMapper();
 
-    public FlowExecutor(
-            InteractionHandler interactionHandler,
-            DataHandler dataHandler,
-            LLMHandler llmHandler
-    ) {
+    @Autowired
+    private ChatMemoryService chatMemoryService;
+
+    public FlowExecutor(InteractionHandler interactionHandler,
+                        DataHandler dataHandler,
+                        LLMHandler llmHandler) {
         this.interactionHandler = interactionHandler;
         this.dataHandler = dataHandler;
         this.llmHandler = llmHandler;
@@ -39,11 +42,7 @@ public class FlowExecutor {
 
     /**
      * Process a single node, performing its action and returning the ID
-     * of the next node (or null if the flow ends here).
-     *
-     * If the node is auto-chained (like a data node or an LLM node with
-     * showConversation=false), we immediately process the next node
-     * instead of returning its ID.
+     * of the next node (or null if the flow ends).
      */
     public String processNode(Flow flow, Node node, Map<String, Object> context, WebSocketSession session) {
         try {
@@ -51,13 +50,14 @@ public class FlowExecutor {
 
             switch (node.getType()) {
                 case "interactionNode": {
-                    // 1) Possibly send a bot response
+                    // Possibly send a bot response
                     String botResponse = node.getData().getBotResponse();
                     if (botResponse != null && !botResponse.isEmpty()) {
                         sendMessage(session, botResponse);
                         logger.info("Sent bot response: {}", botResponse);
                     }
-                    // 2) Capture user response from context, if any
+
+                    // Optionally handle the user response from context
                     String userResponse = (String) context.get("userResponse");
                     if (userResponse != null) {
                         logger.info("User response received: {}", userResponse);
@@ -67,7 +67,7 @@ public class FlowExecutor {
 
                 case "dataNode": {
                     // 1) Process the data node
-                    dataHandler.handle(node, context);
+                    dataHandler.handle(node, context, session);
                     logger.info("Data node processed: {}", node.getId());
 
                     // 2) Immediately auto-process the next node
@@ -85,6 +85,7 @@ public class FlowExecutor {
                     // 1) Generate a response
                     llmHandler.handle(node, context, session);
                     String llmResponse = (String) context.get("llmResponse");
+                    chatMemoryService.storeUserChat(session.getId(), "assistant", llmResponse);
 
                     // 2) Check if showConversation is false => auto-chain
                     Boolean showConversation = (node.getData() != null && node.getData().getShowConversation() != null)
@@ -93,8 +94,7 @@ public class FlowExecutor {
                     if (Boolean.FALSE.equals(showConversation)) {
                         // Auto-chain to next node
                         context.put("userResponse", llmResponse);
-                        logger.info("LLM node (ID: {}) with showConversation=false; auto-chaining to next node. userResponse={}",
-                                node.getId(), llmResponse);
+                        logger.info("LLM node (ID: {}) with showConversation=false; auto-chaining...", node.getId());
 
                         Node nextNode = getNextNode(flow, node);
                         if (nextNode == null) {
@@ -126,8 +126,7 @@ public class FlowExecutor {
                 }
             }
 
-            // If we reach here, it means we have a normal or "non-auto-chaining" node.
-            // So we just find the next node but do NOT auto-process it. We return the next node ID.
+            // If we reach here, find next node but do NOT auto-process.
             Node nextNode = getNextNode(flow, node);
             if (nextNode == null) {
                 logger.info("No more edges from node: {} => flow ended.", node.getId());
@@ -166,7 +165,7 @@ public class FlowExecutor {
     }
 
     /**
-     * Send a message via WebSocket if session is available. Safe to call with null.
+     * Sends a message to the user via WebSocket, and also stores it in Redis as "assistant".
      */
     private void sendMessage(WebSocketSession session, String message) {
         if (session == null || !session.isOpen()) {
@@ -174,6 +173,9 @@ public class FlowExecutor {
             return;
         }
         try {
+            // -- Store bot/assistant message in Redis
+            chatMemoryService.storeUserChat(session.getId(), "assistant", message);
+
             Map<String, String> response = new HashMap<>();
             response.put("sender", "bot");
             response.put("message", message);
