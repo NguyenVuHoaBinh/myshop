@@ -128,7 +128,9 @@ public class DataHandler {
 
             // 9) Optionally store the response in context
             if (responseData != null) {
-                context.put("lastResponse", responseData);
+                ObjectMapper mapper = new ObjectMapper();
+                String responseJson = mapper.writeValueAsString(responseData);
+                context.put("lastResponse", responseJson);
                 log.info("RESPONSE => {}", responseData);
             }
 

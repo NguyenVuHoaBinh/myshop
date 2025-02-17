@@ -141,10 +141,9 @@ const Sidebar = ({
   };
 
   return (
-    <Draggable>
       <div
         style={{
-          width: '300px',
+          width: '400px',
           padding: '10px',
           borderRight: '1px solid #ccc',
           background: '#f9f9f9',
@@ -350,7 +349,6 @@ const Sidebar = ({
           <p>Select a node to edit properties.</p>
         )}
       </div>
-    </Draggable>
   );
 };
 

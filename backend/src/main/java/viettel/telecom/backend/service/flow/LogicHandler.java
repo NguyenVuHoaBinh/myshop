@@ -1,38 +1,52 @@
 package viettel.telecom.backend.service.flow;
 
-import org.springframework.expression.EvaluationContext;
-import org.springframework.expression.spel.standard.SpelExpressionParser;
-import org.springframework.expression.spel.support.StandardEvaluationContext;
 import org.springframework.stereotype.Service;
 import viettel.telecom.backend.entity.flow.Flow;
+import viettel.telecom.backend.entity.flow.Flow.Node;
+import viettel.telecom.backend.entity.flow.LogicCase;
 
+import java.util.List;
 import java.util.Map;
 
+/**
+ * Evaluates a "logicNode" with multiple expressions (cases).
+ * The first matching expression determines the next node ID.
+ */
 @Service
 public class LogicHandler {
 
-    public String handle(Flow.Node node, Map<String, Object> context) {
-        // Retrieve condition from the node
-        String condition = node.getData().getBotResponse(); // Assuming `botResponse` stores the condition for logic nodes
+    private final ConditionEvaluator conditionEvaluator;
 
-        if (condition != null) {
-            try {
-                // Set up the SpEL parser and evaluation context
-                SpelExpressionParser parser = new SpelExpressionParser();
-                EvaluationContext evalContext = new StandardEvaluationContext(context);
+    public LogicHandler(ConditionEvaluator conditionEvaluator) {
+        this.conditionEvaluator = conditionEvaluator;
+    }
 
-                // Evaluate the condition
-                boolean conditionMet = parser.parseExpression(condition).getValue(evalContext, Boolean.class);
+    /**
+     * Goes through each logicCase. Evaluates its expression (SpEL)
+     * against the context map. The first that matches => returns that nextNode.
+     * If none match, returns node.getNext() as a fallback.
+     */
+    public String handle(Node node, Map<String, Object> context) {
+        if (node.getData() == null || node.getData().getLogicCases() == null) {
+            // No logic cases => fallback to node.getNext()
+            return node.getNext();
+        }
 
-                // Return the appropriate next step ID based on the evaluation
-                return conditionMet ? node.getData().getTemplateId() : node.getData().getLabel();
-            } catch (Exception e) {
-                // Fallback if condition evaluation fails
-                return node.getData().getLabel();
+        List<LogicCase> logicCases = node.getData().getLogicCases();
+        for (LogicCase logicCase : logicCases) {
+            String expression = logicCase.getExpression();
+            if (expression == null || expression.isEmpty()) {
+                continue; // skip blank expressions
+            }
+
+            boolean matched = conditionEvaluator.evaluate(expression, context);
+            if (matched) {
+                // Return the nextNode for this case
+                return logicCase.getNextNode();
             }
         }
 
-        // If no condition is provided, proceed to the next step by default
-        return node.getData().getTemplateId();
+        // If no expression matched, fallback to node.getNext()
+        return node.getNext();
     }
 }

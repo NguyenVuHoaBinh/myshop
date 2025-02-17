@@ -5,32 +5,36 @@
   border-radius: 5px;
   min-width: 150px;
   text-align: center;
+  /* default background if not overridden */
+  background-color: #f9f9f9;
 }
+
 .custom-node.interaction-node {
   background-color: #fbe9e7;
 }
+
 .custom-node.llm-node {
   background-color: #ede7f6;
 }
+
 .custom-node.logic-node {
   background-color: #e8f5e9;
 }
+
 .custom-node.data-node {
   background-color: #e3f2fd;
 }
+
 .custom-node.start-node {
   background-color: #dff9fb;
   border: 2px solid #22a6b3;
-  padding: 10px;
   border-radius: 10px;
-  text-align: center;
 }
+
 .custom-node.end-node {
   background-color: #f8b8b8;
   border: 2px solid #eb4d4b;
-  padding: 10px;
   border-radius: 10px;
-  text-align: center;
 }
 
 /* Handles (Connection Points) */
@@ -38,11 +42,13 @@
   border-radius: 50%;
   cursor: pointer;
 }
+
 .react-flow__handle-target {
   height: 12px;
   width: 12px;
   border: 2px solid red;
 }
+
 .react-flow__handle-source {
   height: 12px;
   width: 12px;
@@ -53,64 +59,21 @@
 .react-flow__edge-path {
   stroke: #a53434; /* Default color for edges */
   stroke-width: 3; /* Edge thickness */
-  stroke-opacity: 0.9; /* Edge opacity */
-  animation: none; /* Remove any dashed animations if previously applied */
+  stroke-opacity: 0.9;
+  /* For solid edges, disable dash */
+  stroke-dasharray: none;
 }
 
 /* Arrowhead Styling */
 .react-flow__edge-arrowhead {
-  fill: #af2e2e; /* Arrowhead color matches the edge */
-  transform: translate(0px, 1px); /* Adjust for precise alignment */
+  fill: #af2e2e;
+  transform: translate(0px, 1px);
 }
 
-/* Circle Animation on Edges */
-.react-flow-circle {
-  r: 5px;
-  fill: #00bfff; /* Animated circle color */
-  transform-origin: center;
-}
-
-/* Edge Animation for Dashing (Optional - Disable if solid edges only) */
+/* Optional Edge Animation - Disabled */
 .react-flow__edge {
-  position: relative; /* Keeps it aligned with SVG */
-}
-.react-flow__edge-path {
-  stroke: #0b44ff88; /* Default solid edge line */
-  stroke-width: 3; /* Thicker edges */
-  stroke-dasharray: none; /* Disable dashing */
-}
-
-/* [OPTIONAL] Remove circular stroke animation if not needed */
-.react-flow__edge {
-  animation: none; /* No animation for edges */
-}
-/* Node Styling */
-.custom-node {
-  padding: 10px;
-  border: 1px solid #ccc;
-  border-radius: 5px;
-  min-width: 150px;
-  text-align: center;
-}
-.custom-node.start-node {
-  background-color: #dff9fb;
-  border: 2px solid #22a6b3;
-}
-.custom-node.end-node {
-  background-color: #f8b8b8;
-  border: 2px solid #eb4d4b;
-}
-
-/* Handles */
-.react-flow__handle {
-  border-radius: 50%;
-  cursor: pointer;
-}
-
-/* Solid Edges */
-.react-flow__edge-path {
-  stroke: #888;
-  stroke-width: 3;
+  position: relative;
+  animation: none;
 }
 
 /* Delete Button Style */

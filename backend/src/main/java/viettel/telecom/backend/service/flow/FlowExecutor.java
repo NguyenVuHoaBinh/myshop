@@ -17,7 +17,8 @@ import java.util.Map;
 
 
 /**
- * A single-step flow executor that processes each node.
+ * A single-step flow executor that processes each node
+ * and returns the ID of the next node (or null if flow ends).
  */
 @Service
 public class FlowExecutor {
@@ -27,6 +28,8 @@ public class FlowExecutor {
     private final InteractionHandler interactionHandler;
     private final DataHandler dataHandler;
     private final LLMHandler llmHandler;
+    private final LogicHandler logicHandler;  // <--- (NEW) we inject this to handle multi-branch logic
+
     private final ObjectMapper objectMapper = new ObjectMapper();
 
     @Autowired
@@ -34,83 +37,90 @@ public class FlowExecutor {
 
     public FlowExecutor(InteractionHandler interactionHandler,
                         DataHandler dataHandler,
-                        LLMHandler llmHandler) {
+                        LLMHandler llmHandler,
+                        LogicHandler logicHandler) {
         this.interactionHandler = interactionHandler;
         this.dataHandler = dataHandler;
         this.llmHandler = llmHandler;
+        this.logicHandler = logicHandler;
     }
 
-    /**
-     * Process a single node, performing its action and returning the ID
-     * of the next node (or null if the flow ends).
-     */
     public String processNode(Flow flow, Node node, Map<String, Object> context, WebSocketSession session) {
         try {
             logger.debug("processNode() - ID: {}, Type: {}", node.getId(), node.getType());
 
             switch (node.getType()) {
                 case "interactionNode": {
-                    // Possibly send a bot response
+                    // Example: send a bot message
                     String botResponse = node.getData().getBotResponse();
                     if (botResponse != null && !botResponse.isEmpty()) {
                         sendMessage(session, botResponse);
                         logger.info("Sent bot response: {}", botResponse);
                     }
-
-                    // Optionally handle the user response from context
-                    String userResponse = (String) context.get("userResponse");
-                    if (userResponse != null) {
-                        logger.info("User response received: {}", userResponse);
-                    }
+                    // Possibly read userResponse from context...
                     break;
                 }
 
                 case "dataNode": {
-                    // 1) Process the data node
                     dataHandler.handle(node, context, session);
+                    String apiResponse = (String) context.get("lastResponse");
+                    sendMessage(session, apiResponse);
                     logger.info("Data node processed: {}", node.getId());
-
-                    // 2) Immediately auto-process the next node
+                    // Auto-process next node
                     Node nextNode = getNextNode(flow, node);
                     if (nextNode == null) {
                         logger.info("No more edges from node: {} => flow ended.", node.getId());
                         sendMessage(session, "Flow ended. No further nodes.");
                         return null;
                     }
-                    // Re-enter processNode for chaining
                     return processNode(flow, nextNode, context, session);
                 }
 
                 case "llmNode": {
-                    // 1) Generate a response
                     llmHandler.handle(node, context, session);
                     String llmResponse = (String) context.get("llmResponse");
                     chatMemoryService.storeUserChat(session.getId(), "assistant", llmResponse);
 
-                    // 2) Check if showConversation is false => auto-chain
-                    Boolean showConversation = (node.getData() != null && node.getData().getShowConversation() != null)
-                            ? node.getData().getShowConversation() : Boolean.TRUE;
-
-                    if (Boolean.FALSE.equals(showConversation)) {
-                        // Auto-chain to next node
+                    // If showConversation=false, auto-chain to next
+                    Boolean showConversation = node.getData().getShowConversation();
+                    if (showConversation != null && !showConversation) {
                         context.put("userResponse", llmResponse);
-                        logger.info("LLM node (ID: {}) with showConversation=false; auto-chaining...", node.getId());
-
                         Node nextNode = getNextNode(flow, node);
                         if (nextNode == null) {
-                            logger.info("No more edges from node: {} => flow ended.", node.getId());
+                            logger.info("No more edges => flow ended.");
                             sendMessage(session, "Flow ended. No further nodes.");
                             return null;
                         }
                         return processNode(flow, nextNode, context, session);
                     } else {
-                        // Normal case: send the LLM response to the user
+                        // Otherwise, just send the response
                         if (llmResponse != null && session != null && session.isOpen()) {
                             sendMessage(session, llmResponse);
                             logger.info("LLM response sent: {}", llmResponse);
                         }
                     }
                     break;
+                }
+
+                // (NEW) MULTI-BRANCH LOGIC NODE:
+                case "logicNode": {
+                    // Evaluate expressions via LogicHandler
+                    String nextNodeId = logicHandler.handle(node, context);
+
+                    if (nextNodeId == null) {
+                        // No match => flow ends or fallback
+                        logger.info("No match in logic node => using node.next or ending flow: {}", node.getId());
+                        sendMessage(session, "Flow ended or fallback not found for logic node.");
+                        return null;
+                    }
+                    Node nextNode = getNodeById(flow, nextNodeId);
+                    if (nextNode == null) {
+                        logger.warn("No node found with ID {} => flow ended.", nextNodeId);
+                        sendMessage(session, "Flow ended. Next node not found: " + nextNodeId);
+                        return null;
+                    }
+                    logger.info("Logic node matched => jumping to node: {}", nextNodeId);
+                    return processNode(flow, nextNode, context, session);
                 }
 
                 case "endNode": {
@@ -126,7 +136,7 @@ public class FlowExecutor {
                 }
             }
 
-            // If we reach here, find next node but do NOT auto-process.
+            // If we reach here, handle next node but don't auto-process
             Node nextNode = getNextNode(flow, node);
             if (nextNode == null) {
                 logger.info("No more edges from node: {} => flow ended.", node.getId());
@@ -143,8 +153,7 @@ public class FlowExecutor {
     }
 
     /**
-     * Locates the next node by searching for the first edge whose
-     * source == currentNode's ID, then retrieving that edge's target node.
+     * Find the next node by looking at the first edge with source == currentNode.id
      */
     private Node getNextNode(Flow flow, Node currentNode) {
         return flow.getEdges().stream()
@@ -155,7 +164,7 @@ public class FlowExecutor {
     }
 
     /**
-     * Convenience method to find a node by ID within the flow's node list.
+     * Utility method to find a node by ID in the flow
      */
     private Node getNodeById(Flow flow, String nodeId) {
         return flow.getNodes().stream()
@@ -164,16 +173,12 @@ public class FlowExecutor {
                 .orElse(null);
     }
 
-    /**
-     * Sends a message to the user via WebSocket, and also stores it in Redis as "assistant".
-     */
     private void sendMessage(WebSocketSession session, String message) {
         if (session == null || !session.isOpen()) {
-            logger.debug("No open session available; cannot send message: {}", message);
+            logger.debug("No open session; cannot send message: {}", message);
             return;
         }
         try {
-            // -- Store bot/assistant message in Redis
             chatMemoryService.storeUserChat(session.getId(), "assistant", message);
 
             Map<String, String> response = new HashMap<>();
@@ -183,7 +188,7 @@ public class FlowExecutor {
             String jsonResponse = objectMapper.writeValueAsString(response);
             session.sendMessage(new TextMessage(jsonResponse));
         } catch (IOException e) {
-            logger.error("Failed to send WebSocket message. Details: {}", e.getMessage(), e);
+            logger.error("Failed to send WebSocket message: {}", e.getMessage(), e);
         }
     }
 }

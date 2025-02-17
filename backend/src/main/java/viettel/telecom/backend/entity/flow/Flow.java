@@ -12,9 +12,16 @@ import jakarta.validation.constraints.NotEmpty;
 import java.util.List;
 import java.util.Map;
 
+/**
+ * Represents a flow structure stored in Elasticsearch index "flows".
+ *
+ * For logic nodes, we now support two ways:
+ *   1) Single expression (botResponse/templateId/label).
+ *   2) Multi-branch logic with List<LogicCase>.
+ */
 @Data
-@Document(indexName = "flows") // Elasticsearch index for flows
-@JsonIgnoreProperties(ignoreUnknown = true) // Ignore any extra fields at the top level
+@Document(indexName = "flows")
+@JsonIgnoreProperties(ignoreUnknown = true)
 public class Flow {
 
     @Id
@@ -75,9 +82,7 @@ public class Flow {
         @Field(type = FieldType.Object)
         private NodeData data;
 
-        // If your flow engine uses a 'next' property at the node level,
-        // keep it here or manage it via edges. Some flows store next node as edges only.
-        // We'll keep it optional in case you want it.
+        // Optional, if you want a fallback "next" at the node level:
         @Field(type = FieldType.Keyword)
         private String next;
 
@@ -86,7 +91,6 @@ public class Flow {
         public static class Position {
             @Field(type = FieldType.Float)
             private float x;
-
             @Field(type = FieldType.Float)
             private float y;
         }
@@ -96,76 +100,64 @@ public class Flow {
         public static class NodeData {
 
             @Field(type = FieldType.Text)
-            private String label;
+            private String label;       // Possibly used as fallback or display text
 
             @Field(type = FieldType.Text)
             private String name;
 
+            /**
+             * SINGLE EXPRESSION:
+             *   - For a "logic" node,
+             *   - e.g. "userInput == 'Yes'"
+             */
             @Field(type = FieldType.Text)
             private String botResponse;
 
+            /**
+             * SINGLE EXPRESSION:
+             *   - If condition is true => go to templateId
+             */
             @Field(type = FieldType.Keyword)
             private String templateId;
 
-            // This field is for selected template details (LLM usage, etc.)
-            @Field(type = FieldType.Object)
-            private SelectedTemplate selectedTemplate;
+            /**
+             * MULTI-BRANCH LOGIC:
+             *   - A list of (expression => nextNode) pairs
+             */
+            @Field(type = FieldType.Nested)
+            private List<LogicCase> logicCases;
 
-            // Indicates whether the conversation should be shown (defaults to true)
+            // Additional fields for LLM, Data Node, etc.
             @Field(type = FieldType.Boolean)
             private Boolean showConversation;
 
-            // LLM config group
             @Field(type = FieldType.Object)
             private LLMConfig llmconfig;
 
-            // -----------------------------
-            // NEW FIELDS FOR DATA NODE
-            // -----------------------------
-
-            /**
-             * The URL endpoint to which we'll POST data.
-             * May contain placeholders like "/api/[entity]/create".
-             */
             @Field(type = FieldType.Text)
             private String requestUrl;
 
-            /**
-             * The body payload for the POST request.
-             * This can be any JSON structure, so we store it as a Map.
-             * It may contain placeholders like "[groupName]".
-             */
             @Field(type = FieldType.Object)
             private Map<String, Object> requestBody;
 
-            /**
-             * The next node ID if this request is successful.
-             */
             @Field(type = FieldType.Text)
             private String onSuccessNextNode;
 
-            /**
-             * The next node ID if this request fails (error fallback).
-             */
             @Field(type = FieldType.Text)
             private String onErrorNextNode;
 
-            // ---------------------------------------------------------
-            // Inner classes for LLM usage or selected templates
-            // ---------------------------------------------------------
+            @Field(type = FieldType.Object)
+            private SelectedTemplate selectedTemplate;
 
             @Data
             @JsonIgnoreProperties(ignoreUnknown = true)
             public static class LLMConfig {
                 @Field(type = FieldType.Keyword)
-                private String aiModel; // e.g., "gpt-4o", "gpt-4o-mini", etc.
-
+                private String aiModel;
                 @Field(type = FieldType.Float)
                 private Double temperature;
-
                 @Field(type = FieldType.Integer)
                 private Integer max_tokens;
-
                 @Field(type = FieldType.Boolean)
                 private Boolean stream;
             }
@@ -173,22 +165,16 @@ public class Flow {
             @Data
             @JsonIgnoreProperties(ignoreUnknown = true)
             public static class SelectedTemplate {
-
                 @Field(type = FieldType.Keyword)
                 private String id;
-
                 @Field(type = FieldType.Text)
                 private String name;
-
                 @Field(type = FieldType.Text)
                 private String description;
-
                 @Field(type = FieldType.Text)
                 private String type;
-
                 @Field(type = FieldType.Text)
                 private String object;
-
                 @Field(type = FieldType.Text)
                 private String objectField;
 
@@ -209,7 +195,6 @@ public class Flow {
                 public static class FieldDetails {
                     @Field(type = FieldType.Text)
                     private String fieldName;
-
                     @Field(type = FieldType.Keyword)
                     private String fieldType;
                 }
