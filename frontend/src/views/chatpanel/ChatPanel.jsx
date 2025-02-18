@@ -163,7 +163,6 @@ const ChatPanel = ({ flowId }) => {
         ref={chatContainerRef}
         style={{
           flex: 1,
-          overflowY: "auto",
           padding: "10px",
           backgroundColor: "#f7f7f7",
         }}
