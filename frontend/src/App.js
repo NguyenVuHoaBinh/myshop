@@ -21,6 +21,8 @@ const NewPromptTemplateModal = React.lazy(() =>
 const AgentBuilderModal = React.lazy(() => import('./views/agentbuildermodal/AgentBuilderModal'))
 const FlowManager = React.lazy(() => import('./views/flowbuilder/FlowManager'))
 const FlowEditor = React.lazy(() => import('./views/flowbuilder/FlowEditor'))
+const TopicEditorPage = React.lazy(() => import('./views/topic/TopicEditorPage'))
+const TopicListPage = React.lazy(() => import('./views/topic/TopicListPage'))
 
 const App = () => {
   const { isColorModeSet, setColorMode } = useColorModes('coreui-free-react-admin-template-theme')
@@ -56,9 +58,7 @@ const App = () => {
 
           {/* Flow Management Routes */}
           <Route exact path="/flowbuilder" name="Flow Manager" element={<FlowManager />} />
-          {/* 1) FlowEditor for creating a new flow */}
           <Route exact path="/floweditor" name="Flow Editor" element={<FlowEditor />} />
-          {/* 2) FlowEditor for editing an existing flow by ID */}
           <Route exact path="/floweditor/:flowId" name="Flow Editor (Edit)" element={<FlowEditor />} />
 
           {/* Prompt and Template Management */}
@@ -114,6 +114,10 @@ const App = () => {
               )
             }
           />
+
+          {/* Topic Management Routes */}
+          <Route exact path="/topics" name="Topic List" element={<TopicListPage />} />
+          <Route exact path="/topic-editor/:id" name="Topic Editor" element={<TopicEditorPage />} />
 
           {/* Default Layout (catch-all) */}
           <Route path="*" name="Home" element={<DefaultLayout />} />

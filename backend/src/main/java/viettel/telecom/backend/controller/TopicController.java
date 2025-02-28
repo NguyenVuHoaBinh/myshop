@@ -7,6 +7,7 @@ import org.springframework.web.bind.annotation.*;
 import viettel.telecom.backend.entity.topic.Topic;
 import viettel.telecom.backend.service.topic.TopicService;
 
+import java.util.List;
 import java.util.Optional;
 
 /**
@@ -57,4 +58,10 @@ public class TopicController {
         Topic updatedTopic = topicService.removeFlowFromTopic(id, flowId);
         return new ResponseEntity<>(updatedTopic, HttpStatus.OK);
     }
+    @GetMapping
+    public ResponseEntity<List<Topic>> getAllTopics() {
+        List<Topic> topics = topicService.getAllTopics();
+        return new ResponseEntity<>(topics, HttpStatus.OK);
+    }
+
 }

@@ -78,6 +78,16 @@ const _nav = [
     },
   },
   {
+    component: CNavItem,
+    name: 'Topic Builder',
+    to: '/topics',
+    icon: <CIcon icon={cilSpeedometer} customClassName="nav-icon" />,
+    badge: {
+      color: 'info',
+      text: 'NEW',
+    },
+  },
+  {
     component: CNavTitle,
     name: 'Theme',
   },

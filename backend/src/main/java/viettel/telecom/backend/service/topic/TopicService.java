@@ -85,4 +85,13 @@ public class TopicService {
         topic.setUpdatedAt(Instant.now());
         return topicRepository.save(topic);
     }
+
+    public List<Topic> getAllTopics() {
+        Iterable<Topic> iterable = topicRepository.findAll();
+        List<Topic> topics = new ArrayList<>();
+        iterable.forEach(topics::add);
+        return topics;
+    }
+
+
 }
